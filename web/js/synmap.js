@@ -1491,3 +1491,277 @@ function checkRequestSize(url) {
     };
 
 }(this.coge || (this.coge = {}), jQuery, _));
+
+//var dropdownMixin = function() {
+//    var listeners = [];
+//
+//    my.selected = function(callback) {
+//        listeners.push(callback);
+//    };
+//
+//    my.handleSelected: function(selected) {
+//        listeners.forEach(function(callback) {
+//            callback(data);
+//        });
+//    };
+//
+//    return my;
+//};
+
+function debounce(fn, delay) {
+    var timer = null;
+    return function () {
+        var context = this, args = arguments;
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+            fn.apply(context, args);
+        }, delay);
+    };
+}
+
+
+var processQueue = (function(func) {
+    var _data = [],
+        _batch = 50,
+        _clear = function() {},
+        _invalidate = function() {},
+        _after = function() {},
+        _timeout;
+
+    var my = function(data) {
+        my.enqueue(data);
+        _invalidate();
+        _clear();
+        my.process();
+    };
+
+    my.enqueue = function(data) {
+        _invalidate();
+        _data = data.slice(0);
+
+        return my;
+    };
+
+    my.invalidate = _invalidate;
+
+    my.process = function() {
+        var valid = true;
+
+        _invalidate = my._invalidate = function() {
+            clearTimeout(_timeout);
+            valid = false;
+        };
+
+        function process_chunk() {
+            if (!valid) return;
+            if (!_data.length){
+                _after();
+                return;
+            }
+
+            var chunk = _data.splice(0, _batch);
+            chunk.map(func);
+            _timeout = window.setTimeout(process_chunk, 20);
+        };
+
+        process_chunk();
+    };
+
+    my.clear = function(_) {
+        if(!arguments.length) {
+            _invalidate();
+            _clear();
+            return my;
+        }
+
+        _clear = _;
+        return my;
+    };
+
+    my.after = function(_) {
+        _after = _;
+        return my;
+    };
+
+    return my;
+});
+
+var OrganismList = function(el) {
+    this.el = $(el);
+    this.el.on("change", "select:first", this.changed.bind(this));
+
+    var batch_func = function(list, organism) {
+        $("<option>", {text: organism.name, value: organism.id,
+            class: organism.className || "" }).appendTo(list);
+    };
+
+    var list = this.el.find("select:first");
+    this.process = new processQueue(batch_func.bind(undefined, list))
+        .clear(function() {list.html(""); })
+        .after(function() {
+            list.find(":first")
+                .attr("selected","selected")
+                .change();
+        });
+
+    this.setDefault();
+};
+
+OrganismList.prototype.setDefault = function() {
+    var item = $("<option>", {
+        "class": "info",
+        text: "Please search for an organism and select a genome."
+    });
+
+    this.process.clear();
+
+    var count = this.el.find(".count");
+    count.html("Organisms count: 0");
+    this.el.find("select:first").html(item);
+}
+
+OrganismList.prototype.changed = function(event) {
+    var organism = $(event.target).attr('value');
+    this.el.trigger("coge.organism.selected", [organism])
+};
+
+OrganismList.prototype.setOrganisms = function(data) {
+    var count = this.el.find(".count");
+        missing = $("<option>", {
+            "class": "alert",
+            text : "An organism could not be found. " +
+                "Try modifying your search."});
+
+    count.html("Organisms count: " + data.length);
+
+    if (!data.length) {
+        this.el.find("select:first").html(missing);
+    } else {
+        this.process(data)
+    }
+};
+
+var Search = function(el) {
+};
+
+Search.prototype.fetch = function(query) {
+    var deferred;
+
+    if (!query) {
+        deferred = $.Deferred();
+        deffered.resolve([]);
+        return deferred;
+    }
+
+    //FIXME: Required until perl ajax removed
+    var params = $.extend({}, query, {jquery_ajax: 1 });
+
+    return $.ajax({
+        data: params,
+        dataType: 'json'
+    });
+};
+
+var Genomes = function(el) {
+    this.el = $(el);
+    this.el.on("change", this.changed.bind(this));
+    this.add= $("<span>", {style: "vertical-align: middle", text: "Add Genome"})
+        .addClass("ui-button ui-corner-all")
+        .on("click", this.added.bind(this));
+
+    var success= $("<span>", {style: "vertical-align: middle"})
+        .addClass("ui-icon-change ui-icon");
+};
+
+Genomes.prototype.added = function(event) {
+    var options = $(this.el).find("option:selected");
+    this.el.trigger("coge.genome.added", [$(options[0]), $(options[1])]);
+};
+
+Genomes.prototype.setGenomes = function(data) {
+    var list = this.el.find("select:first").html("");
+
+    var batch_func = function(genome) {
+        $("<option>", {text: genome.name, value: genome.id, "data-cds": genome.cds}).appendTo(list);
+    };
+
+    if(data.length > 0) {
+        this.changed();
+        this.el.append(this.add);
+        this.el.find("select").each(function(item) {
+            $(this).removeAttr("disabled");
+        });
+    } else {
+        this.el.find("select").each(function(item) {
+            $(this).attr("disabled", "disabled");
+        });
+        this.el.find(this.add).remove();
+    }
+
+    data.forEach(batch_func);
+};
+
+Genomes.prototype.setFeatureTypes = function() {
+    var option = this.el.find(":selected");
+    var matchTrue = /true/;
+    var cds = matchTrue.test(option.attr("data-cds"));
+    var cds_feature = this.el.find("[value=cds]");
+
+    if (cds) {
+        cds_feature.removeAttr("disabled");
+        this.el.find(".feature-type").val("cds");
+    } else {
+        cds_feature.attr("disabled", "disabled");
+        this.el.find(".feature-type").val("genomic");
+    }
+};
+
+Genomes.prototype.changed = function(event) {
+    var option = this.el.find(":selected");
+    this.setFeatureTypes();
+
+    $(document).trigger("coge.genome.selected", {
+        id: option.attr("value"),
+        cds: option.attr("cds"),
+    });
+};
+
+var GenomeInfo = function(organism, genome) {
+    this.organism = organism;
+    this.genome = genome;
+}
+
+GenomeInfo.prototype.organism = function(_) {
+    if (!arguments.length) return this.organism;
+
+    this.organism = _;
+    return this;
+};
+
+var SynMap = function() {
+    var engine = "<span class=\"alert\">The job engine has failed.</span><br>Please use the link below to use the previous version of SynMap.";
+    this.unique_id = Math.floor(10000000000 * Math.random());
+    this.basename = basefile;
+    this.nolog = 0;
+    this.waittime = 1000;
+    this.runtime = 0;
+    this.fetch_error = 0;
+    this.error = 0;
+};
+
+SynMap.prototype.run = function(query) {
+    var deferred;
+
+    if (!query || !request) {
+        deferred = $.Deferred();
+        deffered.resolve([]);
+        return deferred;
+    }
+
+    query.fname = "go";
+
+    return $.ajax({
+        data: query,
+        dataType: 'json'
+    })
+};
