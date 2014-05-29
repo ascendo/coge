@@ -519,7 +519,6 @@ sub gen_body {
     my $fid2 = 0;
     $fid2 = $FORM->param('fid2') if $FORM->param('fid2');
     $template->param( 'FID2'      => $fid2 );
-    $template->param( 'PAGE_NAME' => $PAGE_NAME );
     $template->param( 'TEMPDIR'   => $TEMPDIR );
     return $template->output;
 }
