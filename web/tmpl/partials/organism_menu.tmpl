@@ -1,5 +1,5 @@
 <tmpl_if name="org_menu">
-    <section class="ui-widget-content ui-corner-all resizable" style="float: left; padding: 0.3em; height: auto; width:625px;">
+    <section class="ui-widget-content ui-corner-all resizable" style="float: left; padding: 0.3em; height: auto; width:500;">
         <h4 style="font-weight: normal; margin: 0;">Organism <tmpl_var name="num"> Search: </h4>
 
         <div class="small">
@@ -8,9 +8,9 @@
                 name = "org_name<tmpl_var name=num>"
                 id="org_name<tmpl_var name=num>"
                 style="font-style:italic"
-                onKeyUp="timing('org_name<tmpl_var name=num>');"
-                placeholder="<tmpl_var name=org_name>">
-            <span class="ui-button ui-corner-all" onClick="timing('org_name<tmpl_var name=num>');">
+                placeholder="<tmpl_var name=org_name>"
+                data-search-type="desc">
+            <span class="ui-button ui-corner-all">
                 <span class="ui-icon ui-icon-arrowrefresh-1-w"></span>
             </span>
 
@@ -19,46 +19,42 @@
                 name="org_desc<tmpl_var name=num>"
                 id="org_desc<tmpl_var name=num>"
                 style="font-style:italic"
-                onKeyUp="timing('org_desc<tmpl_var name=num>');"
                 placeholder="<tmpl_var name=org_desc>">
-            <span class="ui-button ui-corner-all" onClick="timing('org_desc<tmpl_var name=num>');">
+            <span class="ui-button ui-corner-all">
                 <span class="ui-icon ui-icon-arrowrefresh-1-w"></span>
             </span>
         </div>
 
         <div id="org_list<tmpl_var name=num>">
-            <tmpl_var name="org_list">
+            <div class="count small"></div>
+            <select size="5" multiple style="width: 100%; margin-top: 10px;">
+                <tmpl_var name="org_list">
+            </select>
         </div>
 
-        <table>
-            <tr>
-                <td>Genome:</td>
-
-                <td>
-                    <div id="dsg_menu<tmpl_var name=num>">
+        <div>
+                <div id="dsg_menu<tmpl_var name=num>" class="inline">
+                    <!--
                         <tmpl_var name="dsg_menu">
+                        -->
                     </div>
-                </td>
-
-                <td>
-                    <div id="feattype_menu<tmpl_var name=num>">
-                        <tmpl_if name="feattype_menu">
-                            <tmpl_var name="feattype_menu">
-                        <tmpl_else>
-                            <input type="hidden" id="feat_type<tmpl_var name=num>">
-                        </tmpl_if>
-                    </div>
-                </td>
-            </tr>
-
-            <tr>
-                <td colspan="3">
-                    <div id="genome_message<tmpl_var name=num>">
-                        <tmpl_var name="genome_message">
-                    </div>
-                </td>
-            </tr>
-        </table>
+            <div id="genome_message<tmpl_var name=num>">
+            <span>Genome:</span>
+                    <div id="genome<tmpl_var name=num>" class="inline">
+                        <select style="width: 300px;" disabled="disabled"></select>
+            <div id="feattype_menu<tmpl_var name=num>" class="inline">
+                <tmpl_if name="feattype_menu">
+                    <tmpl_var name="feattype_menu">
+                <tmpl_else>
+                    <input type="hidden" id="feat_type<tmpl_var name=num>">
+                </tmpl_if>
+                <select class="feature-type" disabled="disabled">
+                    <option value="genomic">genomic</option>
+                    <option value="cds">CDS</option>
+                </select>
+                <span class="tag"></span>
+            </div>
+        </div>
 
         <div style="vertical-align:top;" id="dsg_info<tmpl_var name=num>">
             <tmpl_var name="dsg_info">
