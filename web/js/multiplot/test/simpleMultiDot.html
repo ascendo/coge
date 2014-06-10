@@ -1,0 +1,231 @@
+<html>
+<body>
+<div>
+    <label>dotSize <input type="range" min="0.1" max="6" step="0.1" value="1" id="dotSize"></label>
+    <label>shareController <input type="checkbox" id="shareController"></label>
+</div>
+
+<div id="multidotplot"></div>
+
+<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"></script>
+<script src="../jdot/src/dotplot2.js"></script>
+<script src="../synmap.js"></script>
+
+<script>
+
+data1 = "https://geco.iplantcollaborative.org/CoGe/data/diags/7113/7114/html/master_7113_7114.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
+data2 = "https://geco.iplantcollaborative.org/CoGe/data/diags/7113/7118/html/master_7113_7118.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
+data3 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//16911/3068/html/master_16911_3068.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
+data4 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//3079/7113/html/master_3079_7113.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
+data5 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//3079/7928/html/master_3079_7928.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
+data6 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//21203/7113/html/master_21203_7113.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
+data7 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//21203/7928/html/master_21203_7928.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
+
+var dataURIs = [data4, data5, data6, data7];
+
+var sortFunc = inverse(sortBy("name", compareAlphaNumeric));
+
+var plotBuilder = coge.synmap.PlotBuilder();
+
+var layerData, layerObjects, reference, source, data, multidotplot;
+
+var fileData = []; var newFileData = [];
+var plotData = [];
+var genomeIds = [];
+
+var genomesObj = {};
+
+$("input#dotSize").change(function() {
+    var value = $(this).val();
+    console.log("dotSize", value);
+    multidotplot.dotplots.forEach(function(dotPlot) {
+        dotPlot.plot.setDotScale(value);
+        // console.log(dotPlot.plot);
+        dotPlot.plot.redraw();
+        // console.log(dotPlot.plot);
+    })
+    // multidotplot.redraw();
+});
+
+$("input#shareController").click(function() {
+    if ($(this).prop("checked")) {
+
+    }
+})
+
+/**
+ * AJAX Requests populate genomeObj and plotData.
+ */
+var requests = dataURIs.map( function(uri) { return $.getJSON(uri, parseFile); });
+var defer = $.when.apply($, requests);
+
+defer.done(function() {
+    console.info("AJAX requests resolved."); 
+
+    console.log("newFileData", newFileData);
+
+    allIds = newFileData.reduce(function(memo, curr) { 
+        return _.union(memo, [curr.reference, curr.source]) 
+    }, [])
+
+    xIds = allIds;
+    yIds = allIds;
+
+    console.log("xIds", xIds);
+    console.log("yIds", yIds);
+
+    var thisPair, found, flipped, thisPlot;
+
+    xIds.forEach(function(xId) {
+        yIds.forEach(function(yId) {
+
+            thisPair = [xId, yId];
+
+            // Given xId and yId, find associated data
+            found = _.filter(newFileData, function(each) { 
+                var filePair = [each.reference, each.source];
+                return ! _.difference(filePair, thisPair).length;
+            })[0]
+
+            if (! found) return;
+
+            // We will know right here if it needs to be flipped
+            flipped = found && found.reference === yId ? true : false;
+
+            if (flipped) {
+                thisPlot = getPlotData(found.data, yId, xId);
+                thisPlot.layers = flipLayers(thisPlot.layers);
+            } else {
+                thisPlot = getPlotData(found.data, xId, yId);
+            }
+
+            plotData.push({
+                xId: xId,
+                yId: yId,
+                data: thisPlot
+            });
+
+            if ( ! _.has(genomesObj, thisPlot.xid)) {
+                genomesObj[thisPlot.xid] = {
+                    name: thisPlot.xtitle,
+                    length: thisPlot.xtotal,
+                    chromosomes: thisPlot.xlabels
+                };
+            }
+
+            if ( ! _.has(genomesObj, thisPlot.yid)) {
+                genomesObj[thisPlot.yid] = {
+                    name: thisPlot.ytitle,
+                    length: thisPlot.ytotal,
+                    chromosomes: thisPlot.ylabels
+                };
+            }
+        })
+    })
+
+    console.log("fileData", fileData);
+    console.log("plotData", plotData);
+
+    genomesObj.xIds = xIds;
+    genomesObj.yIds = yIds;
+
+    console.log("genomesObj", genomesObj);
+
+    /**
+     * plotData needs to be populated prior to now.
+     */
+    multidotplot = new MultiDotPlot("multidotplot", {
+        size: { width: 1000, height: 800 },
+        genomes: genomesObj,
+        fetchDataHandler: fetchHandler,
+        style: {
+            position: "relative"
+        }
+    });
+});
+
+function getPlotData(json, xAxis, yAxis) {
+    plotBuilder.loadJSON(json); // axisMetric is "nucleotides" by default
+    plotBuilder.setChromosomeSort(sortFunc);
+    plotBuilder.setXAxis(xAxis);
+    plotBuilder.setYAxis(yAxis);
+
+    var data = plotBuilder.get();
+
+    return data;
+};
+
+
+function parseFile(json) {
+
+    // Hacky way of getting the reference and source IDs
+    layerData = _.values(json.layers)[0].data;
+    layerObjects = _.values(layerData)[0];
+    xAxis = reference = _.keys(layerObjects)[0];
+    yAxis = source = _.keys(layerObjects[reference])[0];
+
+    if ( ! _.has(fileData, reference) ) fileData[reference] = {};
+
+    fileData[reference][source] = json;
+
+    newFileData.push({
+        reference: reference,
+        source: source,
+        data: json
+    })
+
+};
+
+var temp;
+flipLine = function(line) {
+    
+    temp = line.x1;
+    line.x1 = line.y1;
+    line.y1 = temp;
+
+    temp = line.x2;
+    line.x2 = line.y2;
+    line.y2 = temp;
+
+}
+
+var syntenicPairs, lines;
+flipLayers = function(layers) {
+    // console.log(layers);
+
+    _.each(layers, function(layer) {
+        _.each(layer.lines, function(line) { flipLine(line); });
+    })
+    return layers;
+}
+
+/**
+ * This function needs to return an array of objects with "lines," "rects," etc.
+ * This is called for each plot. 
+ * "xId" and "yId" will be bound prior to the call.
+ */
+fetchHandler = function(xId, yId) {
+
+    // Given xId and yId, find associated data
+    found = _.filter(plotData, function(each) { 
+        return each.xId == xId && each.yId == yId;
+    })[0]
+
+    if (! found) return([]);
+
+    /**
+     * Lines needs to be an array of objects instead of one giant object
+     */
+    lines = _.values( found.data.layers.syntenic_pairs.lines );
+
+    // TODO: More than just lines
+    data = [{ lines: lines }];
+
+    return(data);
+}
+
+</script>
+
+</body>
+</html>
