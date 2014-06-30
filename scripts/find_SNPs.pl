@@ -13,7 +13,7 @@ use URI::Escape::JavaScript qw(unescape);
 
 use CoGe::Accessory::Workflow;
 use CoGe::Accessory::Jex;
-use CoGe::Accessory::Storage qw(get_genome_file get_experiment_files);
+use CoGe::Core::Storage qw(get_genome_file get_experiment_files);
 use CoGe::Accessory::Web qw(get_defaults get_job schedule_job);
 
 our ($DESC, $YERBA, $DEBUG, $P, $user,
@@ -125,10 +125,11 @@ sub main {
     say STDERR "WORKFLOW DUMP\n" . Dumper($workflow) if $DEBUG;
     say STDERR "JOB NOT SCHEDULED TEST MODE" and exit(0) if $test;
 
-    my $result = $YERBA->submit_workflow($workflow);
     # check if the schedule was successful
-    my $status = decode_json($result);
+    my $status = $YERBA->submit_workflow($workflow);
     exit(1) if defined($status->{error}) and lc($status->{error}) eq "error";
+
+    CoGe::Accessory::TDS::write(catdir($staging_dir, "workflow.json"), $status);
     CoGe::Accessory::Web::schedule_job(job => $job);
 }
 

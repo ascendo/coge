@@ -1115,24 +1115,8 @@ sub go_synfind {
         url     => $synfind_link
     );
 
-    my $log = CoGe::Accessory::Web::log_history(
-        db          => $coge,
-        user_id     => $USER->id,
-        description => $log_msg,
-        page        => $PAGE_TITLE,
-        link        => $tiny_synfind_link,
-    );
-
-    my $job = CoGe::Accessory::Web::get_job(
-        tiny_link => $tiny_synfind_link,
-        title     => $PAGE_TITLE,
-        user_id   => $USER->id,
-        log_id    => $log->id,
-        db_object => $coge
-    );
-
     my ($tiny_id) = $tiny_synfind_link =~ /\/(\w+)$/;
-    my $workflow_id = "synfind-$tiny_id";
+    my $workflow_name = "synfind-$tiny_id";
 
     $cogeweb = CoGe::Accessory::Web::initialize_basefile( tempdir => $TEMPDIR );
 
@@ -1145,11 +1129,9 @@ sub go_synfind {
         $cogeweb->logfile );
     CoGe::Accessory::Web::write_log( "$tiny_synfind_link", $cogeweb->logfile );
     CoGe::Accessory::Web::write_log( "",           $cogeweb->logfile );
-    CoGe::Accessory::Web::write_log( "Created Workflow: $workflow_id",
+    CoGe::Accessory::Web::write_log( "Created Workflow: $workflow_name",
         $cogeweb->logfile );
 
-
-    CoGe::Accessory::Web::schedule_job( job => $job );
 
     #convert numerical codes for different scoring functions to appropriate types
     if ( $scoring_function eq '2' ) {
@@ -1169,8 +1151,8 @@ sub go_synfind {
     ###########################################################################
     my $config   = $ENV{COGE_HOME} . "coge.conf";
     my $workflow = $YERBA->create_workflow(
-        id      => $job->id,
-        name    => $workflow_id,
+        id      => 0,
+        name    => $workflow_name,
         logfile => $cogeweb->logfile
     );
 
@@ -1405,9 +1387,18 @@ sub go_synfind {
     CoGe::Accessory::Web::write_log( "#" x (25), $cogeweb->logfile );
     CoGe::Accessory::Web::write_log( "", $cogeweb->logfile );
 
-    my $response = decode_json($YERBA->submit_workflow($workflow));
+    my $response = $YERBA->submit_workflow($workflow);
     my $success = JSON::true;
     $success = JSON::false if lc($response->{status}) eq "error";
+
+    my $log = CoGe::Accessory::Web::log_history(
+        db          => $coge,
+        user_id     => $USER->id,
+        description => $log_msg,
+        page        => $PAGE_TITLE,
+        link        => $tiny_synfind_link,
+        workflow_id => $response->{id}
+    ) if $response and $response->{id};
 
     my $log_url = $cogeweb->logfile;
     $log_url =~ s/$TEMPDIR/$TEMPURL/;
@@ -1416,7 +1407,7 @@ sub go_synfind {
         success => $success,
         logfile => $log_url,
         link    => $tiny_synfind_link,
-        request => 'jex/status/' . $job->id,
+        request => 'jex/status/' . $response->{id}
     });
 }
 

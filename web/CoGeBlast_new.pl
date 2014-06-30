@@ -695,27 +695,10 @@ sub blast_search {
 
     my $link = CoGe::Accessory::Web::get_tiny_link(url => $url);
     
-    my $log = CoGe::Accessory::Web::log_history(
-        db          => $coge,
-        user_id     => $USER->id,
-       	page        => $PAGE_TITLE,
-      	description => $log_msg,
-        link        => $link
-    );
-
-    my $job = CoGe::Accessory::Web::get_job(
-        tiny_link => $link,
-        title     => $PAGE_TITLE,
-        user_id   => $USER->id,
-        log_id    => $log->id,
-        db_object => $coge
-    );
-    CoGe::Accessory::Web::schedule_job(job => $job);
-
     my ($tiny_id) = $link =~ /\/(\w+)$/;
     my $workflow = $YERBA->create_workflow(
         name    => "cogeblast-$tiny_id",
-        id      => $job->id,
+        id      => 0,
         logfile => $cogeweb->logfile
     );
 
@@ -831,7 +814,17 @@ sub blast_search {
     }
 
     my $status = $YERBA->submit_workflow($workflow);
-    $YERBA->wait_for_completion( $workflow->id );
+
+    my $log = CoGe::Accessory::Web::log_history(
+        db          => $coge,
+        user_id     => $USER->id,
+        page        => $PAGE_TITLE,
+        description => $log_msg,
+        link        => $link,
+        workflow_id => $status->{id}
+    ) if $status and $status->{id};
+
+    $YERBA->wait_for_completion( $status->{id} );
 
     my @completed;
 
@@ -881,11 +874,6 @@ Time to generate results page:   $resultpage_time
 };
     CoGe::Accessory::Web::write_log( "$benchmark", $cogeweb->logfile );
     CoGe::Accessory::Web::write_log( "Finished!",  $cogeweb->logfile );
-
-    $job->update( {
-        status => 2,
-        end_time => \"current_timestamp"
-    } ) if defined($job);
 
     return encode_json(
         { html => $html, click_all_links => $click_all_links } );

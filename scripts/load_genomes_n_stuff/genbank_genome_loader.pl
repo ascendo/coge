@@ -6,8 +6,10 @@ use Data::Dumper;
 use Getopt::Long;
 use CoGeX;
 use File::Path;
+use File::Touch;
+use File::Spec::Functions qw( catdir catfile );
 use CoGe::Accessory::Web;
-use CoGe::Accessory::Storage;
+use CoGe::Core::Storage;
 use CoGe::Accessory::GenBank;
 use POSIX qw(ceil);
 
@@ -18,7 +20,7 @@ my (
 	$base_chr_name, $accn_file,       $max_entries, $user_id,
 	$user_name,     $config,          $host,        $port,
 	$db,            $user,            $pass,        $install_dir,
-	$server,        $force
+	$server,        $force,           $result_dir
 );
 
 GetOptions(
@@ -30,20 +32,18 @@ GetOptions(
 	"user_chr|chr=s"            => \$user_chr,
 	"base_chr_name|basechr=s"   => \$base_chr_name,
 	"dataset_link=s"            => \$ds_link,
-	"test" => \$test, #to add the name test to dataset name for testing purposes
-	"autoupdate" =>
-	  \$autoupdate,    #automatically say 'yes' to any question about proceeding
-	"autoskip" =>
-	  \$autoskip,      #automatically say 'no' to any question about proceeding
-	"delete_src_file"    => \$delete_src_file,
-	"auto_increment_chr" => \$auto_increment_chr,
-	"accn_file|af=s"     => \$accn_file,
-	"max_entries=i"      => \$max_entries,
-	"user_id|uid=i" => \$user_id,    #CoGe user id to which genome is associated
-	"user_name=s"   =>
-	  \$user_name,    #or CoGe user name to which genome is associated
-	"install_dir=s" => \$install_dir,    #optional install path for sequences
-	"force|f"       => \$force,          #force the install of a the genome
+	"test"                      => \$test,          #to add the name test to dataset name for testing purposes
+	"autoupdate"                => \$autoupdate,    #automatically say 'yes' to any question about proceeding
+	"autoskip"                  => \$autoskip,      #automatically say 'no' to any question about proceeding
+	"delete_src_file"           => \$delete_src_file,
+	"auto_increment_chr"        => \$auto_increment_chr,
+	"accn_file|af=s"            => \$accn_file,
+	"max_entries=i"             => \$max_entries,
+	"user_id|uid=i"             => \$user_id,       #CoGe user id to which genome is associated
+	"user_name=s"               => \$user_name,     #or CoGe user name to which genome is associated
+	"install_dir=s"             => \$install_dir,   #optional install path for sequences
+	"result_dir=s"              => \$result_dir,    #optional result path for JSON info
+	"force|f"                   => \$force,         #force the install of a the genome
 
 	# Database params
 	"host=s"        => \$host,
@@ -54,7 +54,6 @@ GetOptions(
 
 	# Or use config file
 	"config=s" => \$config
-
 );
 
 $| = 1;
@@ -109,8 +108,7 @@ unless ($coge) {
 }
 
 print $log "Go = $GO.  Will be adding to the databaes. \n" if $DEBUG;
-print $log
-  "Force is on: will not be checking if genome has been previously loaded.\n"
+print $log "Force is on: will not be checking if genome has been previously loaded.\n"
   if $force;
 my $data_source = get_data_source();    #for NCBI
 
@@ -133,7 +131,8 @@ if ( $accn_file && -r $accn_file ) {
 	}
 }
 
-my $fasta_output;    #storage of main fasta output
+my $fasta_output;       # storage of main fasta output
+my @links_to_existing;  # links to previously loaded datasets
 
 accn: foreach my $accn (@accns) {
 	print $log "log: Working on $accn...\n";
@@ -145,6 +144,7 @@ accn: foreach my $accn (@accns) {
 				$previous_datasets{ $item->{ds}->id } = $item->{ds};
 				my $link = $server . "OrganismView.pl?dsid=" . $item->{ds}->id;
 				print $log "log: Dataset previously loaded: <a href='$link'>$link</a>.  Skipping ...\n";
+				push @links_to_existing, $link;
 				next accn;
 			}
 			elsif ( !$item->{version_diff} && $item->{length_diff} ) {
@@ -621,7 +621,7 @@ accn: foreach my $accn (@accns) {
 			print $log "Creating install path for sequences ...\n";
 			$install_dir =
 			  "$install_dir/"
-			  . CoGe::Accessory::Storage::get_tiered_path( $genome->id ) . "/";
+			  . CoGe::Core::Storage::get_tiered_path( $genome->id ) . "/";
 			if ($GO) {
 				mkpath($install_dir);
 				unless ( -d $install_dir ) {
@@ -665,8 +665,20 @@ accn: foreach my $accn (@accns) {
 	}
 }
 
-unless ($genome) {
-	print $log "log: error: No new datasets to load, see links above to existing ones\n";
+unless ($genome) { 
+	print $log "log: No new datasets to load, see links above to existing ones\n";
+	
+	# Save result document
+    if ($result_dir) {
+        mkpath($result_dir);
+        CoGe::Accessory::TDS::write(
+            catfile($result_dir, '1'),
+            {
+                links => \@links_to_existing
+            }
+        );
+    }
+	
 	exit(-1);
 }
 
@@ -721,20 +733,22 @@ if ( $GO and ( $user_id or $user_name ) ) {
 		print $log "log: error finding user '$user_name'\n";
 		exit(-1);
 	}
-	my $node_types = CoGeX::node_types();
-	my $conn       = $coge->resultset('UserConnector')->create(
-		{
-			parent_id   => $user->id,
-			parent_type => $node_types->{user},
-			child_id    => $genome->id,
-			child_type  => $node_types->{genome},
-			role_id     => 4                       # FIXME hardcoded reader role
-		}
-	);
-	unless ($conn) {
-		print $log "log: error creating user connector\n";
-		exit(-1);
-	}
+
+	# mdb removed 6/17/14 issue 394 - don't create a user connector for NCBI loaded genomes
+	#my $node_types = CoGeX::node_types();
+	#my $conn       = $coge->resultset('UserConnector')->create(
+	#	{
+	#		parent_id   => $user->id,
+	#		parent_type => $node_types->{user},
+	#		child_id    => $genome->id,
+	#		child_type  => $node_types->{genome},
+	#		role_id     => 4                       # FIXME hardcoded reader role
+	#	}
+	#);
+	#unless ($conn) {
+	#	print $log "log: error creating user connector\n";
+	#	exit(-1);
+	#}
 
 	# Log in history
 	CoGe::Accessory::Web::log_history(
@@ -746,9 +760,24 @@ if ( $GO and ( $user_id or $user_name ) ) {
 	);
 }
 
-# This message required to end load on client
+# Save result document
+if ($result_dir) {
+    mkpath($result_dir);
+    CoGe::Accessory::TDS::write(
+        catfile($result_dir, '1'),
+        {
+            genome_id => int($genome->id),
+            links => \@links_to_existing
+        }
+    );
+}
+
 print $log "log: Finished loading genome!\n";
 close($log);
+
+# Create "log.done" file to indicate completion to JEX
+my $logdonefile = "$tmpdir/log.done";
+touch($logdonefile);
 
 exit;
 
@@ -773,7 +802,7 @@ sub add_and_index_sequence {
 	print OUT $fasta;
 	close OUT;
 	print $log "Indexing genome file\n";
-	my $rc = CoGe::Accessory::Storage::index_genome_file(
+	my $rc = CoGe::Core::Storage::index_genome_file(
 		file_path => $file,
 		compress  => $compress
 	);

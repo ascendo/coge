@@ -38,7 +38,8 @@ BEGIN {
     $FASTA_LINE_LEN = 80;
     @ISA     = qw (Exporter);
     @EXPORT =
-      qw( units commify print_fasta get_unique_id get_link_coords );
+      qw( units commify print_fasta get_unique_id get_link_coords format_time_diff sanitize_name
+        execute );
 }
 
 sub units {
@@ -95,5 +96,55 @@ sub get_link_coords { # mdb added 11/20/13 issue 254
 	$stop  += $offset;
 	return ($start, $stop);
 }
+
+sub sanitize_name {
+    my $org = shift;
+
+    $org =~ s/\///g;
+    $org =~ s/\s+/_/g;
+    $org =~ s/\(//g;
+    $org =~ s/\)//g;
+    $org =~ s/://g;
+    $org =~ s/;//g;
+    $org =~ s/#/_/g;
+    $org =~ s/'//g;
+    $org =~ s/"//g;
+
+    return $org;
+}
+
+sub format_time_diff {
+    my $diff = shift;
+
+    my $d = int($diff / (60*60*24));
+    $diff -= $d * (60*60*24);
+    my $h = int($diff / (60*60));
+    $diff -= $h * (60*60);
+    my $m = int($diff / 60);
+    $diff -= $m * 60;
+    my $s = $diff % 60;
+
+    my $elapsed = '';
+    $elapsed .= "${d}d " if $d > 0;
+    $elapsed .= "${h}h " if $h > 0;
+    $elapsed .= "${m}m " if $m > 0 && $d <= 0;
+    $elapsed .= "${s}s" if $s > 0 && $d <= 0;
+
+    return $elapsed;
+}
+
+sub execute {
+    my $cmd = shift;
+
+    my @cmdOut = qx{$cmd};
+    my $cmdStatus = $?;
+
+    if ($cmdStatus != 0) {
+        say STDERR "error: command failed with rc=$cmdStatus: $cmd";
+    }
+
+    return $cmdStatus;
+}
+
 
 1;

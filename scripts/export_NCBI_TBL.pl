@@ -3,8 +3,9 @@
 use strict;
 use CoGeX;
 use Getopt::Long;
-use File::Path;
-use File::Spec;
+use File::Copy;
+use File::Spec::Functions;
+use Sort::Versions;
 use URI::Escape::JavaScript qw(unescape);
 
 our ($DEBUG, $db, $user, $pass, $gid, $config, $host, $port, $P,
@@ -29,9 +30,10 @@ GetOptions(
 
 $| = 1;
 
-mkpath($download_dir, 0, 0777) unless -r $download_dir;
+# Set default download directory
+$download_dir //= ".";
 
-my $logfile = File::Spec->catdir($download_dir, "$filename.log");
+my $logfile = catfile($download_dir, "$filename.log");
 open (my $logh, ">", $logfile) or die "Error opening log file";
 
 if ($config) {
@@ -46,6 +48,7 @@ if ($config) {
 # Verify parameters
 $gid = unescape($gid) if $gid;
 $filename = unescape($filename) if $filename;
+my $file_temp = $filename . ".tmp";
 
 if (not $gid) {
     say $logh "log: error: genome not specified use gid";
@@ -67,12 +70,14 @@ unless ($coge) {
     exit(-1);
 }
 
-my $file = File::Spec->catdir($download_dir, $filename);
+my $file = catfile($download_dir, $filename);
 
-unless (-r $file and -r "$file.finished") {
+return if -r $file;
+
+sub main {
     my $dsg = $coge->resultset('Genome')->find($gid);
 
-    open(my $fh, ">", $file);
+    open(my $fh, ">", $file_temp);
 
     my %chr2ds;
     foreach my $ds ( $dsg->datasets ) {
@@ -116,7 +121,7 @@ unless (-r $file and -r "$file.finished") {
         }
     }
     close($fh);
-    system("touch $file.finished");
+    exit 1 unless move($file_temp, $file);
 }
 
 sub get_name_tag {
@@ -141,3 +146,5 @@ sub get_locs {
     }
     return \@locs;
 }
+
+main;

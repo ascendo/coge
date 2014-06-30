@@ -6,12 +6,8 @@ use 5.10.0;
 use Moose;
 
 # Attributes
-has 'workflow_id' => ( is => 'ro', );
-
 has 'id' => (
     is       => 'ro',
-    isa      => 'Int',
-    required => 1,
 );
 
 has 'name' => (
@@ -21,10 +17,14 @@ has 'name' => (
     default  => "",
 );
 
-has 'logfile' => (
+has 'priority' => (
     is       => 'ro',
-    isa      => 'Str',
-    required => 1,
+    isa      => 'Int',
+    default  => 0,
+);
+
+has 'logfile' => (
+    is       => 'rw',
     default  => "",
 );
 
