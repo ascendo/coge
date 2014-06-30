@@ -4,7 +4,6 @@ use strict;
 no warnings 'redefine';
 umask(0);
 
-
 use CoGeX;
 use CoGe::Accessory::Jex;
 use CoGe::Accessory::Workflow;
@@ -547,7 +546,6 @@ sub gen_org_menu {
     if ($dsg and $USER->has_access_to_genome($dsg)) {
         my $org = $dsg->organism;
         $oid = $org->id;
-
 
         my ( $dsg_info, $feattype_menu, $message ) = get_genome_info(
             dsgid    => $dsgid,
