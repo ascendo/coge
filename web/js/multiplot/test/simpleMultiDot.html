@@ -7,20 +7,22 @@
 
 <div id="multidotplot"></div>
 
-<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+<script src="//code.jquery.com/jquery-1.11.0.min.js"></script>
 <script src="//cdnjs.cloudflare.com/ajax/libs/underscore.js/1.6.0/underscore-min.js"></script>
-<script src="../jdot/src/dotplot2.js"></script>
-<script src="../synmap.js"></script>
+<script src="../../jdot/src/dotplot2.js"></script>
+<script src="../../synmap.js"></script>
 
 <script>
 
+console.log("testing again whoop");
+
 data1 = "https://geco.iplantcollaborative.org/CoGe/data/diags/7113/7114/html/master_7113_7114.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
 data2 = "https://geco.iplantcollaborative.org/CoGe/data/diags/7113/7118/html/master_7113_7118.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
-data3 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//16911/3068/html/master_16911_3068.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
-data4 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//3079/7113/html/master_3079_7113.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
-data5 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//3079/7928/html/master_3079_7928.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
-data6 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//21203/7113/html/master_21203_7113.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
-data7 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//21203/7928/html/master_21203_7928.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json"
+data3 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//16911/3068/html/master_16911_3068.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
+data4 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//3079/7113/html/master_3079_7113.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
+data5 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//3079/7928/html/master_3079_7928.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
+data6 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//21203/7113/html/master_21203_7113.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
+data7 = "https://geco.iplantcollaborative.org/erbriones/coge//data/diags//21203/7928/html/master_21203_7928.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.json";
 
 var dataURIs = [data4, data5, data6, data7];
 
@@ -44,7 +46,7 @@ $("input#dotSize").change(function() {
         // console.log(dotPlot.plot);
         dotPlot.plot.redraw();
         // console.log(dotPlot.plot);
-    })
+    });
     // multidotplot.redraw();
 });
 
@@ -52,7 +54,7 @@ $("input#shareController").click(function() {
     if ($(this).prop("checked")) {
 
     }
-})
+});
 
 /**
  * AJAX Requests populate genomeObj and plotData.
@@ -65,9 +67,9 @@ defer.done(function() {
 
     console.log("newFileData", newFileData);
 
-    allIds = newFileData.reduce(function(memo, curr) { 
+    var allIds = newFileData.reduce(function(memo, curr) {
         return _.union(memo, [curr.reference, curr.source]) 
-    }, [])
+    }, []);
 
     xIds = allIds;
     yIds = allIds;
