@@ -48,9 +48,7 @@ $(document).ready(function(){
     $("#synmap_go").on("click", function() {
         console.log("selected", selected);
         runMulti(selected);
-        // run_synmap(false, $('#regen_images')[0].checked);
         // ga('send', 'event', 'synmap', 'run');
-
     });
 
     var organism1 = new OrganismList("#org_list1");
@@ -99,15 +97,10 @@ $(document).ready(function(){
      */
     genome1.el.on("coge.genome.added", function(event, genome, type) {
 
-        console.info("coge.genome.added");
-
         var genomeVal = genome.val();
 
-        // These correspond to dsgid and feat_type
         var organism = $("#org_list1").find(":selected").text();
         var genomeElement = $("<em></em>", {text: genome.text()}).html();
-
-        console.log("organism", organism);
 
         var added = _.find(selected, function(each) { return each.genome == genomeVal; });
 
@@ -131,7 +124,6 @@ $(document).ready(function(){
                 .on("click", function() {
                     row.remove();
                     selected = _.reject(selected, function(each) { return each.genome == genomeVal; });
-                    console.log("genome.val()", genomeVal, "selected", selected);
                 });
 
             row.append($("<td></td>").html(type.val()));
@@ -142,117 +134,91 @@ $(document).ready(function(){
     });
 
     var plotData = [],
-        fileData = [];
+        fileData = [],
+        multiDot;
 
-    // FIXME: runMulti attached to window for Dev only
-    window.runMulti = function runMulti(selected) {
+    function addDotPlotSelection(selected) {
+        var head = "<thead><tr><th>Genome</th><th>X Axis</th><th>Y Axis</th></tr>";
 
-        // FIXME: DEV ONLY
-        // selected = [{featType: "cds", genome: "7098"}, {featType: "cds", genome: "7101"}, {featType: "cds", genome: "7096"}];
-        selected = [{featType: "cds", genome: "16904"}, {featType: "cds", genome: "93"}];
+        var plotSelectTable = $("<table>")
+            .append(head).append("<tbody>").insertBefore("#results");
 
-        var allIds = selected.reduce(function(prev, curr) {
-            return _.union( prev, curr.genome );
-        }, []);
+        selected.forEach(function(s) {
+            var row = $("<tr>").data(s);
+            row.append($("<td>").text(s.genome + "-" + s.featType));
+            $("<td>").append(checkBox("x")).appendTo(row);
+            $("<td>").append(checkBox("y")).appendTo(row);
+            plotSelectTable.append(row);
+        });
 
-        var genomesObj = {};
-        var genomeIds = {};
+        function checkBox(clas) { return $("<input>").attr("type", "checkbox").attr("checked", true).addClass(clas) }
 
-        genomeIds.x = allIds;
-        genomeIds.y = allIds;
+        return plotSelectTable;
+    }
 
-        genomesObj.xIds = allIds; // [allIds[0]]; // [allIds[1]];
-        genomesObj.yIds = allIds; // [allIds[0]]; // [allIds[0]];
+    runMulti(); // FIXME: DEV ONLY
+
+    function runMulti(selected) {
 
         /** FIXME: #results height issues */
         var size = { width: 800, height: 500 };
         $("#results").css("min-height", size.height + "px").show();
 
-        var config = {
-            size: size,
-            genomeIds: genomeIds,
-            fetchDataHandler: fetchHandler,
-            axisSizeRatio: { x: 0.22, y: 0.15 }
-        };
+        // FIXME: DEV ONLY
+        selected = [
+            {featType: "cds", genome: "7098"},
+            {featType: "cds", genome: "7101"},
+            {featType: "cds", genome: "7096"}
+        ];
+
+        var plotSelectTable = addDotPlotSelection(selected);
+
+        var genomeIds = {x: [], y: []};
+
+        $("<button>").text("Generate MultiDotPlot").insertAfter(plotSelectTable)
+            .click(function() {
+                genomeIds.x = getCheckedIds("x");
+                genomeIds.y = getCheckedIds("y");
+                makeMulti(genomeIds, size);
+            });
+
+        function getCheckedIds(dim) {
+            var r = [];
+            plotSelectTable.find("." + dim + ":checked").parents("tr")
+                .each(function(i, e) { r.push($(e).data().genome) });
+            return r;
+        }
+
+    }
+
+    function makeMulti(genomeIds, size) {
+        $("#results").empty();
 
         /** Create the MultiDotPlot without any genome data */
-        this.multiDot = new MultiDotPlot("results", config);
-
-        var multiDot = this.multiDot;
+        multiDot = new MultiDotPlot("results")
+            .size(size)
+            .genomeIds(genomeIds)
+            .fetchDataHandler(fetchHandler)
+            .axisSizeRatio({x: 0.35, y: 0.25 })
+            .build();
 
         console.groupCollapsed("Fetching Plot Data");
 
-        this.multiDot.dotplots.forEach(function(dotplot) {
+        multiDot.dotPlots().forEach(function(dotplot) {
 
-            function tryFindFlipped() {
-                console.info(dotplot.xId, dotplot.yId, "Requesting flipped results");
-                return getRequestForPair(dotplot.yId, dotplot.xId, "get_results", selected)
-                    .then(resolveOrNotify);
-            }
-
-            function scheduleJob(existingRequest) {
-                var func;
-                if (! existingRequest) {
-                    func = function() {
-                        console.info(dotplot.xId, dotplot.yId, "No existing job. Scheduling job");
-                        return getRequestForPair(dotplot.xId, dotplot.yId, "go", selected)
-                            .then(function(r) { return $.Deferred().notify(r); });
-                    }
-                } else {
-                    func = function() {
-                        return $.Deferred().notify(existingRequest);
-                    }
-                }
-                return func;
-            }
-
-            function waitForJob(requestObject, error) {
-                if (error) return $.Deferred().reject("Error checking job status:" + error);
-
-                setTimeout(function() {
-                    $.getJSON(requestObject.request)
-                        .done(function(r) {
-                            console.log(dotplot.xId, dotplot.yId, "Request Link:", requestObject.request, "Status:", r);
-                            if (r.status === "Completed" || r.status === "Failed") {
-                                requestFile(requestObject);
-                            } else {
-                                waitForJob(requestObject)
-                            }
-                        })
-                        .fail(function(e) {
-                            waitForJob(requestObject, e);
-                        })
-                }, 2 * 1000);
-            }
-
-            function make(json) {
-                // console.info(dotplot.xId, dotplot.yId, "Parsing data.");
-                var data = parseDataForPlot(json, dotplot);
-                plotData.push({
-                    xId: dotplot.xId,
-                    yId: dotplot.yId,
-                    data: data
-                });
-                dotplot.chromosomes({
-                    x: data.xlabels, y: data.ylabels
-                });
-                dotplot.axes()["x"].title(data.xtitle);
-                dotplot.axes()["y"].title(data.ytitle);
-                dotplot.redraw();
-                dotplot.toggleAxes();
-                multiDot.positionAll();
-            }
+            var genomeIds = dotplot.genomeIds(),
+                findFlippedFunc = tryFindFlipped(genomeIds);
 
             function requestFile(existingRequest) {
-                console.info(dotplot.xId, dotplot.yId, "Requesting results");
+                console.info(genomeIds.x, genomeIds.y, "Requesting results");
 
-                getRequestForPair(dotplot.xId, dotplot.yId, "get_results", selected)
-                    .then(resolveOrNotify, null, null)
-                    .then(null, null, tryFindFlipped)
-                    .then(null, null, scheduleJob(existingRequest))
-                    .then(null, null, waitForJob)
-                    .fail(function(error) { console.error(div.xId, div.yId, "Error:", error) })
-                    .done(make);
+                var scheduleJobFunc = scheduleJob(genomeIds, existingRequest);
+
+                getRequestForGenomes(genomeIds.x, genomeIds.y, "get_results", selected)
+                    .then(resolveOrCall( findFlippedFunc ))
+                    .then(resolveOrCall( scheduleJobFunc ))
+                    .then(null, null, waitForJob(requestFile))
+                    .then(make(dotplot), function(e) { console.log("Error:", e) });
             }
 
             requestFile();
@@ -260,31 +226,84 @@ $(document).ready(function(){
 
         console.groupEnd("Fetching Plot Data");
 
-        // FIXME: DEV ONLY
-        window.multiDot = this.multiDot;
-
 //        lineWidthScaleSlider();
 //        collapseButton();
-    };
-
-    // FIXME: DEV ONLY
-    window.runMulti();
-
-    // window.multiDot.position();
-
-    function resolveOrNotify(json) {
-        if (json && (! json.error)) return $.Deferred().resolve(json);
-        return $.Deferred().notify(json);
     }
 
-    function getRequestForPair(xId, yId, funcName, selected) {
-        var xGenome = _.find(selected, function(s) { return s.genome == xId; });
-        var yGenome = _.find(selected, function(s) { return s.genome == yId; });
-
+    function getRequestForGenomes(xId, yId, funcName) {
         /** Set up params to be "sent" to SynMap.pl */
-        var pairParams = getMultiParams(funcName, undefined, xGenome.genome, yGenome.genome, 1, 1);
+        var pairParams = getMultiParams(funcName, undefined, xId, yId, 1, 1);
 
         return $.getJSON("SynMap.pl", pairParams);
+    }
+
+    function resolveOrCall(func) {
+        return function(data) {
+            if (data.error) return func(data);
+            return data;
+        }
+    }
+
+    function tryFindFlipped(genomeIds) {
+        return function(data) {
+            console.info(genomeIds.x, genomeIds.y, "Requesting flipped results");
+            return getRequestForGenomes(genomeIds.y, genomeIds.x, "get_results", selected);
+        }
+    }
+
+    function scheduleJob(genomeIds, existingRequest) {
+        if (! existingRequest) {
+            return function() {
+                console.info(genomeIds.x, genomeIds.y, "No existing job. Scheduling job");
+                return getRequestForGenomes(genomeIds.x, genomeIds.y, "go", selected)
+                    .then(function(newRequest) { return $.Deferred().notify(newRequest); });
+            }
+        } else {
+            return function() {
+                return $.Deferred().notify(existingRequest);
+            }
+        }
+    }
+
+    function waitForJob(requestFileFunc) {
+        return function wait(requestObject, error) {
+            if (error) return $.Deferred().reject("Error checking job status:" + error);
+
+            setTimeout(function() {
+                $.getJSON(requestObject.request)
+                    .done(function(r) {
+                        console.log("Request Link:", requestObject.request, "Status:", r);
+                        if (r.status === "Completed" || r.status === "Failed") {
+                            requestFileFunc(requestObject);
+                        } else {
+                            wait(requestObject)
+                        }
+                    })
+                    .fail(function(e) {
+                        wait(requestObject, e);
+                    })
+            }, 2 * 1000);
+        }
+    }
+
+    function make(dotplot) {
+        return function(json) {
+            // console.info(dotplot.xId, dotplot.yId, "Parsing data.");
+            var data = parseDataForPlot(json, dotplot);
+            plotData.push({
+                xId: dotplot.xId,
+                yId: dotplot.yId,
+                data: data
+            });
+            dotplot.chromosomes({
+                x: data.xlabels, y: data.ylabels
+            });
+            dotplot.axes()["x"].title(data.xtitle);
+            dotplot.axes()["y"].title(data.ytitle);
+            dotplot.redraw();
+            dotplot.toggleAxes();
+            multiDot.positionAll();
+        }
     }
 
     function parseDataForPlot(data, plot) {
@@ -293,26 +312,9 @@ $(document).ready(function(){
         var flipped = (fileData.reference === plot.yId && fileData.source === plot.xId && plot.xId !== plot.yId);
 
         if (flipped)
-            return flipPlot(buildPlotData(fileData.data, plot.yId, plot.xId));
+            return flipData(buildPlotData(fileData.data, plot.yId, plot.xId));
         else
             return buildPlotData(fileData.data, plot.xId, plot.yId);
-    }
-
-    function makePlot(data, div) {
-        var plotGenomes = [
-            {
-                name: thisPlot.xtitle,
-                length: thisPlot.xtotal,
-                chromosomes: thisPlot.xlabels
-            },
-            {
-                name: thisPlot.ytitle,
-                length: thisPlot.ytotal,
-                chromosomes: thisPlot.ylabels
-            }
-        ];
-
-        this.multiDot.makeDotPlot(div.xId, div.yId, plotGenomes);
     }
 
     function parseFile(json) {
@@ -337,7 +339,7 @@ $(document).ready(function(){
         var plotBuilder = coge.synmap.PlotBuilder();
         var sortFunc = inverse(sortBy("name", compareAlphaNumeric));
 
-        plotBuilder.loadJSON(json); // axisMetric is "nucleotides" by default
+        plotBuilder.loadJSON(json); /** axisMetric is "nucleotides" by default */
         plotBuilder.setChromosomeSort(sortFunc);
         plotBuilder.setXAxis(xAxis);
         plotBuilder.setYAxis(yAxis);
@@ -345,7 +347,7 @@ $(document).ready(function(){
         return(plotBuilder.get());
     }
 
-    function flipPlot(plotData) {
+    function flipData(plotData) {
         var flipped = {};
 
         flipped.xid = plotData.yid;

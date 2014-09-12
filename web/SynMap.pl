@@ -3316,6 +3316,14 @@ sub get_results {
         });
     }
 
+    if ($opts{return_json} and -s $json_file) {
+        open(my $handle, $json_file);
+        my $json_raw = <$handle>;
+        close($handle);
+
+        return $json_raw if $opts{return_json};
+    }
+
     my $log = $cogeweb->logfile;
     $log =~ s/$DIR/$URL/;
     $json_file =~ s/$DIR/$URL/;
