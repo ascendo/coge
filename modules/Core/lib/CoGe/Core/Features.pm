@@ -26,7 +26,11 @@ LICENSE file included with this module.
 use strict;
 use warnings;
 
+use CoGe::Accessory::Web qw(get_defaults);
+use CoGeX;
 use Data::Dumper;
+use DBI;
+use JSON::XS;
 use LWP::UserAgent;
 
 ################################################ subroutine header begin ##
@@ -74,6 +78,50 @@ sub count {
 	while ($self->next) {
 	}
 	return $self->{lines};
+}
+
+sub dump {
+    my $db = CoGeX->dbconnect(get_defaults());
+    my $features = $db->resultset('Feature')->search;#(undef,{page=>shift,rows=>shift});
+	my $cursor = $features->cursor;
+	my $json_encoder = JSON::XS->new->allow_nonref;
+	while (my @row = $cursor->next) {
+		my $json = '{';
+		$json .= '"type":' . $row[1] . ',"dataset":' . $row[2] . ',"start":' . $row[3] . ',"stop":' . $row[4] . ',"strand":' . $row[5] . ',"chromosome":"' . $row[6] . '"';
+		my $names = $db->resultset('FeatureName')->search({feature_id => $row[0]});
+		my $c = $names->cursor;
+		$json .= ',"names":[';
+		my $first = 1;
+		while (my @r = $c->next) {
+			if ($first) {
+				$first = 0;
+			} else {
+				$json .= ',';
+			}
+			$json .= '{"name":"' . $r[1] . '"';
+			if ($r[2]) {
+				$json .= ',"description":' . $json_encoder->encode($r[2]);
+			}
+			if ($r[4]) {
+				$json .= ',"primary":true';
+			};
+			$json .= '}';
+		}
+		$json .= '],"locations":[';
+		my $locations = $db->resultset('Location')->search({feature_id => $row[0]});
+		$c = $locations->cursor;
+		$first = 1;
+		while (my @r = $c->next) {
+			if ($first) {
+				$first = 0;
+			} else {
+				$json .= ',';
+			}
+			$json .= '{"start":' . $r[1] . ',"stop":' . $r[2] . ',"strand":' . $r[5] . ',"chromosome":"' . $r[3] . '"}';
+		}
+		$json .= ']}';
+		post('coge/features/' . $row[0], $json);
+	}
 }
 
 ################################################ subroutine header begin ##
@@ -140,7 +188,7 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub init {
-	my $r = post('sequence', q({
+	post('sequence', q({
      "settings": {
          "number_of_shards": 1,
          "auto_expand_replicas": "0-all"
@@ -159,8 +207,7 @@ sub init {
          }
      }
  }));
- 	print $r;
- 	$r = post('sequence/sequence/1','{"iid": 0}');
+ 	post('sequence/sequence/1','{"iid": 0}');
 }
 
 ################################################ subroutine header begin ##
