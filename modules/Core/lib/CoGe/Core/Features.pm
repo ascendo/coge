@@ -80,48 +80,125 @@ sub count {
 	return $self->{lines};
 }
 
+################################################ subroutine header begin ##
+
+=head2 dump
+
+ Usage     :
+ Purpose   : copy features from db to elasticsearch
+ Returns   :
+ Argument  : limit (num features to send), [offset (record to start at)]
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
 sub dump {
-    my $db = CoGeX->dbconnect(get_defaults());
-    my $features = $db->resultset('Feature')->search;#(undef,{page=>shift,rows=>shift});
-	my $cursor = $features->cursor;
+	my $limit = shift;
+	my $offset = shift;
 	my $json_encoder = JSON::XS->new->allow_nonref;
-	while (my @row = $cursor->next) {
+    my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
+    my $query = 'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature LIMIT ' . $limit;
+    if ($offset) {
+    	$query .= ' OFFSET ' . $offset;
+    }
+    my $features = $dbh->prepare($query);
+    $features->execute;
+    while (my $feature = $features->fetchrow_arrayref) {
+    	my $feature_id = $feature->[0];
 		my $json = '{';
-		$json .= '"type":' . $row[1] . ',"dataset":' . $row[2] . ',"start":' . $row[3] . ',"stop":' . $row[4] . ',"strand":' . $row[5] . ',"chromosome":"' . $row[6] . '"';
-		my $names = $db->resultset('FeatureName')->search({feature_id => $row[0]});
-		my $c = $names->cursor;
+		$json .= '"type":' . $feature->[1] . ',"dataset":' . $feature->[2] . ',"start":' . $feature->[3] . ',"stop":' . $feature->[4] . ',"strand":' . $feature->[5] . ',"chromosome":"' . $feature->[6] . '"';
+	    my $names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id=' . $feature_id);
+	    $names->execute;
 		$json .= ',"names":[';
 		my $first = 1;
-		while (my @r = $c->next) {
+	    while (my $name = $names->fetchrow_arrayref) {
 			if ($first) {
 				$first = 0;
 			} else {
 				$json .= ',';
 			}
-			$json .= '{"name":"' . $r[1] . '"';
-			if ($r[2]) {
-				$json .= ',"description":' . $json_encoder->encode($r[2]);
+			$json .= '{"name":' . $json_encoder->encode($name->[0]);
+			if ($name->[1]) {
+				$json .= ',"description":' . $json_encoder->encode($name->[1]);
 			}
-			if ($r[4]) {
+			if ($name->[2]) {
 				$json .= ',"primary":true';
 			};
 			$json .= '}';
 		}
 		$json .= '],"locations":[';
-		my $locations = $db->resultset('Location')->search({feature_id => $row[0]});
-		$c = $locations->cursor;
+	    my $locations = $dbh->prepare('SELECT start,stop,strand,chromosome FROM location WHERE feature_id=' . $feature_id);
+	    $locations->execute;
 		$first = 1;
-		while (my @r = $c->next) {
+	    while (my $location = $locations->fetchrow_arrayref) {
 			if ($first) {
 				$first = 0;
 			} else {
 				$json .= ',';
 			}
-			$json .= '{"start":' . $r[1] . ',"stop":' . $r[2] . ',"strand":' . $r[5] . ',"chromosome":"' . $r[3] . '"}';
+			$json .= '{"start":' . $location->[0] . ',"stop":' . $location->[1] . ',"strand":' . $location->[2] . ',"chromosome":"' . $location->[3] . '"}';
 		}
 		$json .= ']}';
-		post('coge/features/' . $row[0], $json);
+		print elasticsearch_post('coge/features/' . $feature_id, $json);
 	}
+}
+
+################################################ subroutine header begin ##
+
+=head2 elasticsearch_get
+
+ Usage     : 
+ Purpose   : send an elasticsearch GET request
+ Returns   : JSON returned by request
+ Argument  : path for request URL
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub elasticsearch_get {
+	my $path = shift;
+	my $req = HTTP::Request->new(GET => 'http://localhost:9200/' . $path);
+	my $ua = LWP::UserAgent->new;
+	my $res = $ua->request($req);
+	return $res->content;
+}
+
+################################################ subroutine header begin ##
+
+=head2 elasticsearch_post
+
+ Usage     : 
+ Purpose   : send an elasticsearch POST request
+ Returns   : JSON returned by request
+ Argument  : path for request URL, JSON to send as data for request
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub elasticsearch_post {
+	my $path = shift;
+	my $content = shift;
+	my $req = HTTP::Request->new(POST => 'http://localhost:9200/' . $path);
+	$req->header( 'Content-Type' => 'application/json' );
+	$req->content($content);
+	my $ua = LWP::UserAgent->new;
+	my $res = $ua->request($req);
+	return $res->content;
 }
 
 ################################################ subroutine header begin ##
@@ -152,22 +229,39 @@ sub find {
 	return 0;
 }
 
-sub get {
-	my $path = shift;
-	my $req = HTTP::Request->new(GET => 'http://localhost:9200/' . $path);
-	my $ua = LWP::UserAgent->new;
-	my $res = $ua->request($req);
-	return $res->content;
+sub get_dataset_features {
+	my $dataset_id = shift;
+	print "dataset_id: $dataset_id\n";
+	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":{"term":{"dataset":' .  $dataset_id . '}}}}}}');
+	my $o = JSON::XS->new->decode($json);
+	print Dumper $o;
 }
+
+################################################ subroutine header begin ##
+
+=head2 get_ids
+
+ Usage     : 
+ Purpose   : get the next set of ids for new features
+ Returns   : the last new id, so set = [last_id-num_ids+1 .. last_id]
+ Argument  : num_ids - the number of ids you want
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
 
 sub get_ids {
 	my $num_ids = shift;
-	my $r = post('sequence/sequence/1/_update?fields=iid&retry_on_conflict=5', qq({
+	my $json = elasticsearch_post('sequence/sequence/1/_update?fields=iid&retry_on_conflict=5', qq({
 		"script": "ctx._source.iid += bulk_size",
 		"params": {"bulk_size": $num_ids},
 		"lang": "groovy"
 	}));
-	print $r;
+	return $json =~ /\[([^\]]*)\]/;
 }
 
 ################################################ subroutine header begin ##
@@ -188,7 +282,7 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub init {
-	post('sequence', q({
+	elasticsearch_post('sequence', q({
      "settings": {
          "number_of_shards": 1,
          "auto_expand_replicas": "0-all"
@@ -207,7 +301,7 @@ sub init {
          }
      }
  }));
- 	post('sequence/sequence/1','{"iid": 0}');
+ 	elasticsearch_post('sequence/sequence/1','{"iid": 0}');
 }
 
 ################################################ subroutine header begin ##
@@ -365,17 +459,6 @@ See Also   :
 sub offset {
 	my $self = shift;
 	return $self->{tokens}[2];
-}
-
-sub post {
-	my $path = shift;
-	my $content = shift;
-	my $req = HTTP::Request->new(POST => 'http://localhost:9200/' . $path);
-	$req->header( 'Content-Type' => 'application/json' );
-	$req->content($content);
-	my $ua = LWP::UserAgent->new;
-	my $res = $ua->request($req);
-	return $res->content;
 }
 
 ################################################ subroutine header begin ##
