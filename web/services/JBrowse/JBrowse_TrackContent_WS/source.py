@@ -63,7 +63,7 @@ def get_config():
     return config
 
 def fetch_sequence(genome_id, chr_id, start, stop, cookie_string):
-    service = '{base}/{service}/sequence/{id}/{chr}?start={start};stop={stop};'
+    service = '{base}{service}/sequence/{id}/{chr}?start={start};stop={stop};'
 
     config = get_config()
     if not config:
@@ -71,10 +71,10 @@ def fetch_sequence(genome_id, chr_id, start, stop, cookie_string):
 
     url = service.format(base=config['SERVER'],
         #service='services/JBrowse/service.pl',
-        service='api/v1/legacy/', # mdb added 2/5/15, COGE-289
+        service='api/v1/legacy', # mdb added 2/5/15, COGE-289
         id=genome_id, chr=chr_id, start=start, stop=stop)
 
-
+    sys.stderr.write(url)
     try:
         name = config['COOKIE_NAME']
 
@@ -254,6 +254,7 @@ def an_features(environ, start_response): # mdb rewritten 11/8/13 issue 246 - ad
             lastStart = 0
             for row in results:
                 if row[8] != lastID and lastID != 0:
+                    response_body["features"][i]["chr"] = chr_id
                     response_body["features"][i]["start"] = lastStart
                     response_body["features"][i]["end"] = lastEnd
                     response_body["features"][i]["uniqueID"] = lastID
@@ -264,6 +265,7 @@ def an_features(environ, start_response): # mdb rewritten 11/8/13 issue 246 - ad
                     i += 1
 
                 elif lastID == 0:
+                    response_body["features"][i]["chr"] = chr_id
                     response_body["features"][i]["start"] = row[6]
                     response_body["features"][i]["end"] = row[7]
                     response_body["features"][i]["uniqueID"] = row[8]

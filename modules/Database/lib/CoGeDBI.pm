@@ -51,13 +51,15 @@ sub get_table {
     my $dbh = shift;         # database connection handle
     my $table = shift;       # table name
     my $hash_fields = shift; # array ref of field names to use as hash keys
-    my $conditions = shift;  
+    my $conditions = shift;
+    my $search_string = shift;
     $hash_fields = [$table.'_id'] unless $hash_fields;
+    $search_string = "=" unless $search_string;
     
     # Build query string
     my $query = "SELECT * FROM $table";
     if ($conditions) {
-        $query .= ' WHERE ' . join(' AND ', map { $_.'='.$conditions->{$_} } keys %$conditions);
+        $query .= ' WHERE ' . join(' AND ', map { $_.$search_string.$conditions->{$_} } keys %$conditions);
     }
     #print STDERR $query, "\n";
     
@@ -310,7 +312,7 @@ sub get_lists_for_user {
     #print STDERR "CoGeDBI::get_lists_for_user $user_id\n";
     
     # Get groups for user
-    my $group_str = get_group_str_for_user($dbh, $user_id);
+    my $group_str = get_group_str_for_user($dbh, $user_id) || -1; # default to -1 to prevent empty IN clause in query
         
     # Get user/group list connections
     my $query = qq{

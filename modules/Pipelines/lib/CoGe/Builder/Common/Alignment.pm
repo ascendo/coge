@@ -7,7 +7,7 @@ use Data::Dumper qw(Dumper);
 use File::Spec::Functions qw(catdir catfile);
 
 use CoGe::Core::Storage qw(get_genome_file get_workflow_paths get_upload_path get_genome_cache_path);
-use CoGe::Accessory::Utils qw(is_fastq_file to_filename);
+use CoGe::Accessory::Utils qw(is_fastq_file to_filename detect_paired_end);
 use CoGe::Builder::CommonTasks;
 
 our $CONF = CoGe::Accessory::Web::get_defaults();
@@ -28,7 +28,6 @@ sub build {
     my $input_files = $opts{input_files}; # array of file paths
     my $genome      = $opts{genome};
     my $metadata    = $opts{metadata};
-    my $additional_metadata = $opts{additional_metadata};
     my $load_id     = $opts{load_id};
     my $alignment_params = $opts{alignment_params};
     my $trimming_params  = $opts{trimming_params};
@@ -55,51 +54,49 @@ sub build {
         return { error => $error };
     }
     
-    # Decompress the fastq input files (when necessary)
-    my @decompressed;
-    foreach my $file (@$input_files) {
+    # Decompress and validate the fastq input files
+    my (@decompressed, @validated);
+    foreach my $input_file (@$input_files) {
+        # Decompress
         my $done_file;
-        if ( $file =~ /\.gz$/ ) {
-            push @tasks, create_gunzip_job($file);
-            $file =~ s/\.gz$//;
+        if ( $input_file =~ /\.gz$/ ) {
+            push @tasks, create_gunzip_job($input_file);
+            $input_file =~ s/\.gz$//;
+            $done_file = "$input_file.decompressed";
         }
-        push @decompressed, $file;
-    }
+        push @decompressed, $input_file;
         
-    # Validate the fastq input files
-    my @validated;
-    foreach my $file (@decompressed) {
-        my $validate_task = create_validate_fastq_job($file, "$file.decompressed");
+        # Validate
+        my $validate_task = create_validate_fastq_job($input_file, $done_file);
         push @validated, @{$validate_task->{outputs}}[0];
         push @tasks, $validate_task;
     }
-    
+        
     # Trim the fastq input files
     my @trimmed;
     my $trim_reads = 1; #TODO add this as an option in LoadExperiment interface
-    if ($trim_reads) {
+    if ($trim_reads && $trimming_params) {
         if ($alignment_params->{read_type} eq 'paired') { # mdb added 5/8/15 COGE-624 - enable paired-end support in cutadapt
-            # Note: paired-end filenames must end in _R1 and _R2 respectively, e.g. test_R1.fastq.gz and test_R2.fastq.gz
-            my @m1 = sort grep { $_ =~ /\_R1\./ } @$input_files; 
-            my @m2 = sort grep { $_ =~ /\_R2\./ } @$input_files;
-            unless (@m1 and @m2 and @m1 == @m2) {
-                my $error = 'Mispaired FASTQ files, m1=' . @m1 . ' m2=' . @m2;
+            # Separate files based on last occurrence of _R1 or _R2 in filename
+            my ($m1, $m2) = detect_paired_end($input_files);
+            unless (@$m1 and @$m2 and @$m1 == @$m2) {
+                my $error = 'Mispaired FASTQ files, m1=' . @$m1 . ' m2=' . @$m2;
                 print STDERR 'CoGe::Builder::Common::Alignment ERROR: ', $error, "\n";
-                print STDERR join(' ', @m1), "\n", join(' ', @m2), "\n";
+                print STDERR 'm1: ', join(' ', @$m1), "\n", 'm2: ', join(' ', @$m2), "\n";
                 return { error => $error };
             }
             
             # Create cutadapt task for each file pair
-            for (my $i = 0;  $i < @m1;  $i++) { 
-                my $file1 = shift @m1;
-                my $file2 = shift @m2;
+            for (my $i = 0;  $i < @$m1;  $i++) { 
+                my $file1 = shift @$m1;
+                my $file2 = shift @$m2;
                 my $trim_task = create_cutadapt_job(
                     fastq => [ $file1, $file2 ],
                     validated => [ "$file1.validated", "$file2.validated" ],
                     staging_dir => $staging_dir,
                     params => $trimming_params
                 );
-                push @trimmed, $trim_task->{outputs}->[0];
+                push @trimmed, @{$trim_task->{outputs}};
                 push @tasks, $trim_task;
             }
         }
@@ -197,13 +194,16 @@ sub build {
         input_file => $sorted_bam_file
     );
 
+    # Get custom metadata to add to experiment
+    my $additional_md = generate_additional_metadata($trimming_params, $alignment_params);
+
     # Load alignment
     my $load_task = create_load_bam_job(
         user => $user,
         metadata => $metadata,
         staging_dir => $staging_dir,
         result_dir => $result_dir,
-        annotations => $additional_metadata,
+        annotations => $additional_md,
         wid => $wid,
         gid => $gid,
         bam_file => $sorted_bam_file
@@ -213,7 +213,6 @@ sub build {
     return {
         tasks => \@tasks,
         bam_file => $sorted_bam_file,
-        metadata => generate_additional_metadata($trimming_params, $alignment_params),
         done_files => [
             $sorted_bam_file,
             $load_task->{outputs}->[1]
@@ -225,11 +224,13 @@ sub generate_additional_metadata {
     my ($trimming_params, $alignment_params) = @_;
     my @annotations;
     
+    push @annotations, qq{https://genomevolution.org/wiki/index.php/Expression_Analysis_Pipeline||note|Generated by CoGe's RNAseq Analysis Pipeline};
+    
     if ($trimming_params) {
         push @annotations, 'note|cutadapt '. join(' ', map { $_.' '.$trimming_params->{$_} } ('-q', '--quality-base', '-m'));
     }
 
-    if ($alignment_params->{tool}) {
+    if ($alignment_params && $alignment_params->{tool}) {
         if ($alignment_params->{tool} eq 'tophat') { # tophat
             push @annotations, qq{note|bowtie2_build};
             push @annotations, 'note|tophat ' . join(' ', map { $_.' '.$alignment_params->{$_} } ('-g'));

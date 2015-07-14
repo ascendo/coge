@@ -99,13 +99,15 @@ $(function() {
 			title: 'Analyses',
 			displayType: 'grid',
 			dataTypes: ['analyses'],
-			noFilter: true
+			noFilter: true,
+			defaultSort: [ 1, 'asc' ]
 		},
 		loads: {
 			title: 'Data loading',
 			displayType: 'grid',
 			dataTypes: ['loads'],
-			noFilter: true
+			noFilter: true,
+			defaultSort: [ 1, 'asc' ]
 		},
 		graph: {
 			title: 'Graph',
@@ -140,6 +142,7 @@ $(function() {
 			contentPanel
 				.update(typeId)
 				.done(function() { 
+					contentPanel.grid.search(''); // clear search filter
 					contentPanel.render();
 					schedule_poll();
 				});
@@ -431,6 +434,8 @@ $.extend(ContentPanel.prototype, {
     		this.element.children('.html').hide();
     		this.element.children('.grid').show();
     		this.grid.update(cachedData);
+    		if (view.defaultSort)
+    			this.grid.dataTable.api().order(view.defaultSort);
     		this.grid.redraw(); // needed to display column widths properly
     		
     		// Restore selection and scroll position
@@ -459,7 +464,10 @@ $.extend(ContentPanel.prototype, {
     	$('.item-button').removeClass('invisible');
 
     	// Update browser url
-    	window.history.pushState({}, "", PAGE_NAME + "?p="+this.selectedView);
+    	var params = coge.utils.getURLParameters();
+    	params['p'] = this.selectedView;
+    	var queryString = coge.utils.toQueryString(params);
+    	window.history.pushState({}, "", PAGE_NAME + "?" + queryString);
     },
     
     renderTitle: function() {
@@ -549,6 +557,7 @@ $.extend(ContentPanel.prototype, {
     		dataType: 'text',
     		data: {
     			fname: 'get_contents',
+    			user_id: USER_ID,
     			item_type: typeId,
     			last_update: lastUpdate,
     			timestamp: init_timestamp('get_contents')
@@ -605,7 +614,7 @@ function DataGrid(params) {
 $.extend(DataGrid.prototype, {
 	initialize: function() {
 		var self = this;
-		this.element.html('<table cellpadding="0" cellspacing="0" border="0" class="dt-cell hover compact row-border"></table>');
+		this.element.html('<table cellpadding="0" cellspacing="0" border="0" class="dt-cell hover compact row-border" style="cursor:pointer;"></table>');
 		
 		// Instantiate grid
 		var dataTable = this.dataTable = this.element.children('table').dataTable({
@@ -697,19 +706,17 @@ $.extend(DataGrid.prototype, {
 		
 		// Add custom date sort functions
 		$.fn.dataTable.ext.oSort['relative-date-pre'] = function(s) {
-			var matches = s.match(/^\<\!\-\-(\d+)\-\-\>/); // the number of days is hidden in an html comment
-			if (!matches)
+			var matches = s.match(/^\<\!\-\-(\d+)\-\-\>/); // the time difference is hidden in an html comment
+			if (!matches || !matches[1])
 				return 999999; // sort last
-			var daysDiff = matches[1];
-			if (!daysDiff)
-				return 999999; // sort last
-		    return parseInt(daysDiff);
+			var diff = matches[1];
+		    return parseInt(diff);
 		};		
 		$.fn.dataTable.ext.oSort['relative-date-asc'] = function(x,y) {
-		    return ((x < y) ? -1 : ((x > y) ? 1 : 0));
+		    return ((x < y) ? 1 : ((x > y) ? -1 : 0));
 		};
 		$.fn.dataTable.ext.oSort['relative-date-desc'] = function(x,y) {
-		    return ((x < y) ? 1 : ((x > y) ? -1 : 0));
+			return ((x < y) ? -1 : ((x > y) ? 1 : 0));
 		};
     },
     
@@ -968,11 +975,14 @@ $.extend(DataGridRow.prototype, { // TODO extend this into separate classes for 
     	dateStr = dateStr.replace(/-/g, '/'); // needed for Firefox & Safari
     	var date = new Date(dateStr);
     	var today = new Date();
-    	var diffDays = Math.floor(Math.abs((today.getTime() - date.getTime())/(24*60*60*1000)));
-    	var dateStr;
-    	if (diffDays == 0) // same day as today
-    		dateStr = (date.getHours() % 12) + ':' + pad(''+date.getMinutes(), 2) + ' ' + (date.getHours() < 12 ? 'am' : 'pm');
-    	else if (diffDays == 1) // yesterday
+    	var diffMS = Math.abs(today.getTime() - date.getTime());
+    	var diffDays = Math.floor(diffMS/(24*60*60*1000));
+    	
+    	if (diffDays == 0 && today.getDate() == date.getDate()) { // same day as today
+    		var hour = (date.getHours() + 24) % 12 || 12;
+    		dateStr = hour + ':' + pad(''+date.getMinutes(), 2) + ' ' + (date.getHours() < 12 ? 'am' : 'pm');
+    	}
+    	else if (diffDays <= 1) // yesterday
     		dateStr = 'Yesterday';
     	else if (diffDays <= 4) // last several days
     		dateStr = diffDays + ' days ago';
@@ -981,7 +991,7 @@ $.extend(DataGridRow.prototype, { // TODO extend this into separate classes for 
     	else // last year or older
     		dateStr = MONTHS[date.getMonth()] + ' ' + date.getDate() + ', ' + date.getFullYear();
 
-    	return '<!--' + diffDays + '-->' + dateStr; // embed the number of days in an html comment for sorting
+    	return '<!--' + diffMS + '-->' + dateStr; // embed the time difference in a hidden html comment for sorting
     }
 });
 

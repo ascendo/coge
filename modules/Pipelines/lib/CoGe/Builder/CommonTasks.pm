@@ -24,7 +24,7 @@ our @EXPORT = qw(
     create_validate_fastq_job create_cutadapt_job create_tophat_workflow
     create_gsnap_workflow create_load_bam_job create_gunzip_job
     create_notebook_job create_bam_sort_job create_iget_job
-    send_email_job add_items_to_notebook_job
+    send_email_job add_items_to_notebook_job add_metadata_to_results_job
 );
 
 our $CONF = CoGe::Accessory::Web::get_defaults();
@@ -338,7 +338,7 @@ sub create_bam_index_job {
         outputs => [
             $input_file . '.bai'
         ],
-        description => "Indexing bam file...",
+        description => "Indexing BAM file...",
     };
 }
 
@@ -348,17 +348,22 @@ sub create_load_vcf_job {
     # Required arguments
     my $metadata = $opts->{metadata};
     my $username = $opts->{username};
+    my $method   = $opts->{method};
     my $staging_dir = $opts->{staging_dir};
     my $annotations = $opts->{annotations};
-       $annotations = '' unless $annotations;
     my $wid = $opts->{wid};
     my $gid = $opts->{gid};
     my $vcf = $opts->{vcf};
+    
+    my $desc = 'Single nucleotide polymorphisms' . ($method ? " (determined by $method method)" : '');
 
     my $cmd = catfile(($CONF->{SCRIPTDIR}, "load_experiment.pl"));
     my $output_path = catdir($staging_dir, "load_vcf");
     
     my $result_file = get_workflow_results_file($username, $wid);
+    
+    my $annotations_str = '';
+    $annotations_str = join(';', @$annotations) if (defined $annotations && @$annotations);
 
     return {
         cmd => $cmd,
@@ -366,14 +371,14 @@ sub create_load_vcf_job {
         args => [
             ['-user_name', qq["$username"], 0],
             ['-name', "'".$metadata->{name}." (SNPs)". "'", 0],
-            ['-desc', qq{"Single nucleotide polymorphisms"}, 0],
+            ['-desc', qq{"$desc"}, 0],
             ['-version', "'".$metadata->{version}."'", 0],
             ['-restricted', "'".$metadata->{restricted}."'", 0],
             ['-gid', $gid, 0],
             ['-wid', $wid, 0],
             ['-source_name', "'".$metadata->{source}."'", 0],
             ['-types', qq{"SNP"}, 0],
-            ['-annotations', qq["$annotations"], 0],
+            ['-annotations', qq["$annotations_str"], 0],
             ['-staging_dir', "./load_vcf", 0],
             ['-file_type', qq["vcf"], 0],
             ['-data_file', $vcf, 0],
@@ -399,7 +404,7 @@ sub create_load_experiment_job {
     my $user = $opts{user};
     my $metadata = $opts{metadata};
     my $staging_dir = $opts{staging_dir};
-    my $annotations = $opts{annotations} || '';
+    my $annotations = $opts{annotations};
     my $wid = $opts{wid};
     my $gid = $opts{gid};
     my $input_file = $opts{input_file};
@@ -409,6 +414,9 @@ sub create_load_experiment_job {
     my $output_path = catdir($staging_dir, "load_experiment");
     
     my $result_file = get_workflow_results_file($user->name, $wid);
+    
+    my $annotations_str = '';
+    $annotations_str = join(';', @$annotations) if (defined $annotations && @$annotations);
 
     return {
         cmd => $cmd,
@@ -423,7 +431,7 @@ sub create_load_experiment_job {
             ['-restricted', "'" . $metadata->{restricted} . "'", 0],
             ['-source_name', "'" . $metadata->{source} . "'", 0],
             #['-types', qq{"BAM"}, 0],
-            ['-annotations', qq["$annotations"], 0],
+            ['-annotations', qq["$annotations_str"], 0],
             ['-staging_dir', "./load_experiment", 0],
             #['-file_type', qq["bam"], 0],
             ['-data_file', $input_file, 0],
@@ -451,7 +459,7 @@ sub create_load_bam_job {
     my $user = $opts{user};
     my $metadata = $opts{metadata};
     my $staging_dir = $opts{staging_dir};
-    my $annotations = $opts{annotations} || '';
+    my $annotations = $opts{annotations};
     my $wid = $opts{wid};
     my $gid = $opts{gid};
     my $bam_file = $opts{bam_file};
@@ -462,6 +470,9 @@ sub create_load_bam_job {
     my $output_path = catdir($staging_dir, "load_bam");
     
     my $result_file = get_workflow_results_file($user->name, $wid);
+    
+    my $annotations_str = '';
+    $annotations_str = join(';', @$annotations) if (defined $annotations && @$annotations);
 
     return {
         cmd => $cmd,
@@ -476,7 +487,7 @@ sub create_load_bam_job {
             ['-wid', $wid, 0],
             ['-source_name', "'" . $metadata->{source} . "'", 0],
             ['-types', qq{"BAM"}, 0],
-            ['-annotations', qq["$annotations"], 0],
+            ['-annotations', qq["$annotations_str"], 0],
             ['-staging_dir', "./load_bam", 0],
             ['-file_type', qq["bam"], 0],
             ['-data_file', $bam_file, 0],
@@ -740,14 +751,18 @@ sub create_gsnap_workflow {
         staging_dir => $staging_dir,
         params => $params,
     });
+    
+    # Filter sam file
+    my %filter = create_sam_filter_job($gsnap{outputs}->[0], $staging_dir);
 
     # Convert sam file to bam
-    my %bam = create_samtools_bam_job($gsnap{outputs}->[0], $staging_dir);
+    my %bam = create_samtools_bam_job($filter{outputs}->[0], $staging_dir);
 
     # Return the bam output name and jobs required
     my @tasks = (
         \%gmap,
         \%gsnap,
+        \%filter,
         \%bam
     );
     my %results = (
@@ -802,7 +817,29 @@ sub create_samtools_bam_job {
         outputs => [
             catfile($staging_dir, $filename . ".bam")
         ],
-        description => "Generating bam file..."
+        description => "Generating BAM file..."
+    );
+}
+
+sub create_sam_filter_job {
+    my ($samfile, $staging_dir) = @_;
+    
+    my $filename = basename($samfile);
+
+    my $cmd = catfile($CONF->{SCRIPTDIR}, "filter_sam.pl");
+    die "ERROR: SCRIPTDIR not specified in config" unless $cmd;
+
+    return (
+        cmd => "$cmd $filename $filename.processed",
+        script => undef,
+        args => [],
+        inputs => [
+            $samfile
+        ],
+        outputs => [
+            catfile($staging_dir, $filename . ".processed")
+        ],
+        description => "Filtering SAM file..."
     );
 }
 
@@ -830,7 +867,7 @@ sub create_bam_sort_job {
         outputs => [
             catfile($staging_dir, $filename . "-sorted.bam")
         ],
-        description => "Sorting bam file..."
+        description => "Sorting BAM file..."
     };
 }
 
@@ -988,6 +1025,48 @@ sub add_items_to_notebook_job {
             $log_file
         ],
         description => "Adding experiment to notebook..."
+    };
+}
+
+sub add_metadata_to_results_job {
+    my %opts = @_;
+    my $user = $opts{user};
+    my $wid = $opts{wid};
+    my $annotations = $opts{annotations}; # array ref
+    my $staging_dir = $opts{staging_dir};
+    my $done_files = $opts{done_files};
+    
+    my $cmd = catfile($CONF->{SCRIPTDIR}, "add_metadata_to_results.pl");
+    die "ERROR: SCRIPTDIR not specified in config" unless $cmd;
+
+    my $result_file = get_workflow_results_file($user->name, $wid);
+    
+    my $log_file = catfile($staging_dir, "add_metadata_to_results", "log.txt");
+    
+    my $annotations_str = '';
+    $annotations_str = join(';', @$annotations) if (defined $annotations && @$annotations);
+    
+    my $args = [
+        ['-uid', $user->id, 0],
+        ['-wid', $wid, 0],
+        ['-annotations', qq{"$annotations_str"}, 0],
+        ['-config', $CONF->{_CONFIG_PATH}, 1],
+        ['-log', $log_file, 0]
+    ];
+
+    return {
+        cmd => $cmd,
+        script => undef,
+        args => $args,
+        inputs => [ 
+            $CONF->{_CONFIG_PATH},
+            @$done_files
+        ],
+        outputs => [ 
+            $result_file,
+            $log_file
+        ],
+        description => "Adding metadata to results..."
     };
 }
 
