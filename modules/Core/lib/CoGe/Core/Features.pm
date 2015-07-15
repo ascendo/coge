@@ -35,12 +35,12 @@ use LWP::UserAgent;
 
 ################################################ subroutine header begin ##
 
-=head2 new
+=head2 copy
 
  Usage     :
- Purpose   :
- Returns   : newly instantiated object for this class
- Argument  :
+ Purpose   : copy a particular dataset from the database to elasticsearch
+ Returns   :
+ Argument  : dataset_id
  Throws    :
  Comments  :
 
@@ -50,20 +50,24 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub new {
-	my ($class) = @_;
-	my $self = {};
-	return bless $self, $class;
+sub copy {
+	my $dataset_id = shift;
+    my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
+    my $query = 'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature WHERE dataset_id=' . $dataset_id;
+    my $features = $dbh->prepare($query);
+    $features->execute;
+    copy_rows($features, $dbh);
 }
 
 ################################################ subroutine header begin ##
 
-=head2 count
+=head2 copy_rows
 
  Usage     :
- Purpose   :
- Returns   : number of chromosomes for the genome
- Argument  :
+ Purpose   : copy features from database rows to elasticsearch
+ Returns   :
+ Argument  : features - database rows to copy
+ 			 dbh - database handle
  Throws    :
  Comments  :
 
@@ -73,11 +77,49 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub count {
-	my $self = shift;
-	while ($self->next) {
+sub copy_rows {
+	my $features = shift;
+	my $dbh = shift;
+	my $json_xs = JSON::XS->new->allow_nonref;
+    while (my $feature = $features->fetchrow_arrayref) {
+    	my $feature_id = $feature->[0];
+		my $json = '{';
+		$json .= '"type":' . $feature->[1] . ',"dataset":' . $feature->[2] . ',"start":' . $feature->[3] . ',"stop":' . $feature->[4] . ',"strand":' . $feature->[5] . ',"chromosome":"' . $feature->[6] . '"';
+	    my $names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id=' . $feature_id);
+	    $names->execute;
+		$json .= ',"names":[';
+		my $first = 1;
+	    while (my $name = $names->fetchrow_arrayref) {
+			if ($first) {
+				$first = 0;
+			} else {
+				$json .= ',';
+			}
+			$json .= '{"name":' . $json_xs->encode($name->[0]);
+			if ($name->[1]) {
+				$json .= ',"description":' . $json_xs->encode($name->[1]);
+			}
+			if ($name->[2]) {
+				$json .= ',"primary":true';
+			};
+			$json .= '}';
+		}
+		$json .= '],"locations":[';
+	    my $locations = $dbh->prepare('SELECT start,stop,strand,chromosome FROM location WHERE feature_id=' . $feature_id);
+	    $locations->execute;
+		$first = 1;
+	    while (my $location = $locations->fetchrow_arrayref) {
+			if ($first) {
+				$first = 0;
+			} else {
+				$json .= ',';
+			}
+			$json .= '{"start":' . $location->[0] . ',"stop":' . $location->[1] . ',"strand":' . $location->[2] . ',"chromosome":"' . $location->[3] . '"}';
+		}
+		$json .= ']}';
+		print elasticsearch_post('coge/features/' . $feature_id, $json);
 	}
-	return $self->{lines};
+	
 }
 
 ################################################ subroutine header begin ##
@@ -100,7 +142,6 @@ See Also   :
 sub dump {
 	my $limit = shift;
 	my $offset = shift;
-	my $json_encoder = JSON::XS->new->allow_nonref;
     my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
     my $query = 'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature LIMIT ' . $limit;
     if ($offset) {
@@ -108,44 +149,7 @@ sub dump {
     }
     my $features = $dbh->prepare($query);
     $features->execute;
-    while (my $feature = $features->fetchrow_arrayref) {
-    	my $feature_id = $feature->[0];
-		my $json = '{';
-		$json .= '"type":' . $feature->[1] . ',"dataset":' . $feature->[2] . ',"start":' . $feature->[3] . ',"stop":' . $feature->[4] . ',"strand":' . $feature->[5] . ',"chromosome":"' . $feature->[6] . '"';
-	    my $names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id=' . $feature_id);
-	    $names->execute;
-		$json .= ',"names":[';
-		my $first = 1;
-	    while (my $name = $names->fetchrow_arrayref) {
-			if ($first) {
-				$first = 0;
-			} else {
-				$json .= ',';
-			}
-			$json .= '{"name":' . $json_encoder->encode($name->[0]);
-			if ($name->[1]) {
-				$json .= ',"description":' . $json_encoder->encode($name->[1]);
-			}
-			if ($name->[2]) {
-				$json .= ',"primary":true';
-			};
-			$json .= '}';
-		}
-		$json .= '],"locations":[';
-	    my $locations = $dbh->prepare('SELECT start,stop,strand,chromosome FROM location WHERE feature_id=' . $feature_id);
-	    $locations->execute;
-		$first = 1;
-	    while (my $location = $locations->fetchrow_arrayref) {
-			if ($first) {
-				$first = 0;
-			} else {
-				$json .= ',';
-			}
-			$json .= '{"start":' . $location->[0] . ',"stop":' . $location->[1] . ',"strand":' . $location->[2] . ',"chromosome":"' . $location->[3] . '"}';
-		}
-		$json .= ']}';
-		print elasticsearch_post('coge/features/' . $feature_id, $json);
-	}
+    copy_rows($features, $dbh);
 }
 
 ################################################ subroutine header begin ##
@@ -203,42 +207,6 @@ sub elasticsearch_post {
 
 ################################################ subroutine header begin ##
 
-=head2 find
-
- Usage     : 
- Purpose   : iterates through list and stops when matching chromosome is found
- Returns   : 1 if found, 0 otherwise
- Argument  : name of chromosome to find (required)
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub find {
-	my $self = shift;
-	my $name = shift;
-	while ($self->next) {
-		if ($name eq $self->name) {
-			return 1;
-		}
-	}
-	return 0;
-}
-
-sub get_dataset_features {
-	my $dataset_id = shift;
-	print "dataset_id: $dataset_id\n";
-	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":{"term":{"dataset":' .  $dataset_id . '}}}}}}');
-	my $o = JSON::XS->new->decode($json);
-	print Dumper $o;
-}
-
-################################################ subroutine header begin ##
-
 =head2 get_ids
 
  Usage     : 
@@ -262,6 +230,68 @@ sub get_ids {
 		"lang": "groovy"
 	}));
 	return $json =~ /\[([^\]]*)\]/;
+}
+
+################################################ subroutine header begin ##
+
+=head2 get_feature_counts
+
+ Usage     :
+ Purpose   : get the counts for each different feature type
+ Returns   : a hash of feature_type_id => count
+ Argument  : dataset_id - required
+ 			 chromosome - optional, to only return features from one chromosome
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_feature_counts {
+	my %opts      = @_;
+	my $json_xs = JSON::XS->new->allow_nonref;
+	print STDERR $json_xs->encode(\%opts);
+	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":{"term":' . $json_xs->encode(\%opts) . '}}},"size":1000000}');
+	my $o = $json_xs->decode($json);
+	my %counts;
+	foreach (@{$o->{hits}->{hits}}) {
+		$counts{$_->{_source}->{type}}++;
+	}
+	return %counts;
+}
+
+################################################ subroutine header begin ##
+
+=head2 get_features
+
+ Usage     : 
+ Purpose   : get all features for a dataset
+ Returns   : array of feature hashes
+ Argument  : dataset_id - required
+ 			 chromosome - optional, to only return features from one chromosome
+ 			 type - optional, feature_type_id, to only return features of the specified type
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_features {
+	my %opts      = @_;
+	my $json_xs = JSON::XS->new->allow_nonref;
+	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":{"term":' . $json_xs->encode(\%opts) . '}}},"size":1000000}');
+	my $o = $json_xs->decode($json);
+	my @hits;
+	foreach (@{$o->{hits}->{hits}}) {
+		push (@hits, $_->{_source});
+	}
+	return @hits;
 }
 
 ################################################ subroutine header begin ##
@@ -302,189 +332,6 @@ sub init {
      }
  }));
  	elasticsearch_post('sequence/sequence/1','{"iid": 0}');
-}
-
-################################################ subroutine header begin ##
-
-=head2 length
-
- Usage     :
- Purpose   : 
- Returns   : length of current chromosome
- Argument  :
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub length {
-	my $self = shift;
-	return $self->{tokens}[1];
-}
-
-################################################ subroutine header begin ##
-
-=head2 lengths
-
- Usage     :
- Purpose   : 
- Returns   : array of lengths of all chromosomes for the genome
- Argument  :
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub lengths {
-	my $self = shift;
-	my @a;
-	while ($self->next) {
-		push @a, $self->length;
-	}
-    return wantarray ? @a : \@a;
-}
-
-################################################ subroutine header begin ##
-
-=head2 name
-
- Usage     :
- Purpose   : 
- Returns   : name of current chromosome
- Argument  :
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub name {
-	my $self = shift;
-	my $name = $self->{tokens}[0];
-	my $index = index($name, '|');
-	if ($index != -1) {
-		$name = substr($name, $index + 1);
-	}
-	return $name;
-}
-
-################################################ subroutine header begin ##
-
-=head2 names
-
- Usage     :
- Purpose   : 
- Returns   : array of names of all chromosomes for the genome
- Argument  :
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub names {
-	my $self = shift;
-	my @a;
-	while ($self->next) {
-		push @a, $self->name;
-	}
-    return wantarray ? @a : \@a;
-}
-
-################################################ subroutine header begin ##
-
-=head2 next
-
- Usage     :
- Purpose   : set the current chromosome to be the next one in the list
- Returns   : 1 if new chromosome is current, 0 if no more chromosomes available
- Argument  :
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub next {
-	my $self = shift;
-	if (!$self->{fh}) {
-		print STDERR caller . "\n";
-	}
-	my $line = readline($self->{fh});
-	if ($line) {
-		my @tokens = split('\t', $line);
-		@{$self->{tokens}} = @tokens;
-		$self->{lines}++;
-		return 1;
-	}
-	close($self->{fh});
-	$self->{fh} = 0;
-	return 0;
-}
-
-################################################ subroutine header begin ##
-
-=head2 offset
-
- Usage     :
- Purpose   : 
- Returns   : offset of current chromosome
- Argument  :
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub offset {
-	my $self = shift;
-	return $self->{tokens}[2];
-}
-
-################################################ subroutine header begin ##
-
-=head2 total_length
-
- Usage     :
- Purpose   : 
- Returns   : length of all chromosomes for the genome
- Argument  :
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub total_length {
-	my $self = shift;
-	my $length = 0;
-	while ($self->next) {
-		$length += $self->length;
-	}
-    return $length;
 }
 
 1;

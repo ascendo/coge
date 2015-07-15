@@ -7,11 +7,12 @@ use CoGe::Accessory::Web;
 use CoGe::Accessory::Jex;
 use CoGe::Accessory::Utils qw(sanitize_name get_unique_id commify execute);
 use CoGe::Accessory::IRODS qw(irods_iput irods_imeta);
-use CoGe::Core::Chromosomes;
-use CoGe::Core::Genome;
-use CoGe::Core::Experiment qw(experimentcmp);
-use CoGe::Core::Storage;
 use CoGe::Builder::CommonTasks;
+use CoGe::Core::Chromosomes;
+use CoGe::Core::Experiment qw(experimentcmp);
+use CoGe::Core::Features;
+use CoGe::Core::Genome;
+use CoGe::Core::Storage;
 
 use HTML::Template;
 use JSON::XS;
@@ -208,49 +209,69 @@ sub get_feature_counts {
     my $chr   = $opts{chr};
     my $query;
     my $name;
-    if ($dsid) {
-        my $ds = $coge->resultset('Dataset')->find($dsid);
-        $name  = "dataset " . $ds->name;
-        $query = qq{
-SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
-  FROM feature
-  JOIN feature_type ft using (feature_type_id)
- WHERE dataset_id = $dsid
-};
-        $query .= qq{AND chromosome = '$chr'} if defined $chr;
-        $query .= qq{
-  GROUP BY ft.name
-};
-        $name .= " chromosome $chr" if defined $chr;
-    }
-    elsif ($dsgid) {
-        my $dsg = $coge->resultset('Genome')->find($dsgid);
-        $name = "dataset group ";
-        $name .= $dsg->name ? $dsg->name : $dsg->organism->name;
-        $query = qq{
-SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
-  FROM feature
-  JOIN feature_type ft using (feature_type_id)
-  JOIN dataset_connector dc using (dataset_id)
- WHERE genome_id = $dsgid
-  GROUP BY ft.name
+#    if ($dsid) {
+#        my $ds = $coge->resultset('Dataset')->find($dsid);
+#        $name  = "dataset " . $ds->name;
+#        $query = qq{
+#SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
+#  FROM feature
+#  JOIN feature_type ft using (feature_type_id)
+# WHERE dataset_id = $dsid
+#};
+#        $query .= qq{AND chromosome = '$chr'} if defined $chr;
+#        $query .= qq{
+#  GROUP BY ft.name
+#};
+#        $name .= " chromosome $chr" if defined $chr;
+#    }
+#    elsif ($dsgid) {
+#        my $dsg = $coge->resultset('Genome')->find($dsgid);
+#        $name = "dataset group ";
+#        $name .= $dsg->name ? $dsg->name : $dsg->organism->name;
+#        $query = qq{
+#SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
+#  FROM feature
+#  JOIN feature_type ft using (feature_type_id)
+#  JOIN dataset_connector dc using (dataset_id)
+# WHERE genome_id = $dsgid
+#  GROUP BY ft.name
+#
+#};
+#    }
 
-};
-    }
+    my $dbh = $coge->storage->dbh;
+	if ($dsgid) {
+		$dsid = $dbh->selectrow_array('SELECT dataset_id FROM dataset_connector WHERE genome_id=' . $dsgid);
+	}
 
-    my $dbh = $coge->storage->dbh;  #DBI->connect( $connstr, $DBUSER, $DBPASS );
-    my $sth = $dbh->prepare($query);
+	# load type names
+    my $sth = $dbh->prepare('SELECT feature_type_id,name FROM feature_type');
     $sth->execute;
-    my $feats = {};
+    my $types = {};
     while ( my $row = $sth->fetchrow_arrayref ) {
-        my $name = $row->[1];
-        $name =~ s/\s+/_/g;
-        $feats->{$name} = {
-            count => $row->[0],
-            id    => $row->[2],
-            name  => $row->[1],
-        };
+    	$types->{$row->[0]} = $row->[1];
     }
+
+#    my $feats = {};
+#    while ( my $row = $sth->fetchrow_arrayref ) {
+#        my $name = $row->[1];
+#        $name =~ s/\s+/_/g;
+#        $feats->{$name} = {
+#            count => $row->[0],
+#            id    => $row->[2],
+#            name  => $row->[1],
+#        };
+#    }
+	my %feature_counts = CoGe::Core::Features::get_feature_counts(dataset_id => $dsid);
+	my $feats;
+	foreach my $key (keys %feature_counts) {
+		$feats->{$types->{$key}} = {
+			count => $feature_counts{$key},
+			id => $key,
+			name => $types->{$key}
+		};
+	}
+
     my $gc_args;
     $gc_args = "chr: '$chr'," if defined $chr;
     $gc_args .= "dsid: $dsid,"
@@ -379,30 +400,31 @@ sub get_codon_usage {
     my $search = { "feature_type.name" => "CDS" };
     $search->{"me.chromosome"} = $chr if defined $chr;
 
-    my (@items, @datasets);
+#    my (@items, @datasets);
+    my (@datasets);
     if ($dsid) {
         my $ds = $coge->resultset('Dataset')->find($dsid);
         return "unable to find dataset id$dsid\n" unless $ds;
-        push @items, $ds;
+#        push @items, $ds;
         push @datasets, $ds;
     }
     if ($dsgid) {
         my $dsg = $coge->resultset('Genome')->find($dsgid);
         return "unable to find genome id $dsgid\n" unless $dsgid;
         $gstid = $dsg->type->id;
-        push @items, $dsg;
+#        push @items, $dsg;
         push @datasets, $dsg->datasets;
     }
 
-    my %seqs; # prefetch the sequences with one call to genomic_sequence (slow for many seqs)
-    foreach my $item (@items) {
-        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosomes;
-
-        for my $chr (@chrs) {
-            $seqs{$chr} = $item->get_genomic_sequence(chr => $chr,
-                                                      seq_type => $gstid);
-        }
-    }
+#    my %seqs; # prefetch the sequences with one call to genomic_sequence (slow for many seqs)
+#    foreach my $item (@items) {
+#        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosomes;
+#
+#        for my $chr (@chrs) {
+#            $seqs{$chr} = $item->get_genomic_sequence(chr => $chr,
+#                                                      seq_type => $gstid);
+#        }
+#    }
 
     my %codons;
     my $codon_total = 0;
@@ -426,12 +448,12 @@ sub get_codon_usage {
             )
           )
         {
-            my $seq = substr(
-                $seqs{ $feat->chromosome },
-                $feat->start - 1,
-                $feat->stop - $feat->start + 1
-            );
-            $feat->genomic_sequence( seq => $seq );
+#            my $seq = substr(
+#                $seqs{ $feat->chromosome },
+#                $feat->start - 1,
+#                $feat->stop - $feat->start + 1
+#            );
+#            $feat->genomic_sequence( seq => $seq );
             $feat_count++;
             ( $code, $code_type ) = $feat->genetic_code() unless $code;
             my ($codon) = $feat->codon_frequency( counts => 1 );
@@ -442,12 +464,11 @@ sub get_codon_usage {
     }
     %codons = map { $_, $codons{$_} / $codon_total } keys %codons;
 
-    my $html = "Codon Usage: $code_type" .
+    return "Codon Usage: $code_type" .
         CoGe::Accessory::genetic_code->html_code_table(
             data => \%codons,
             code => $code
         );
-    return $html;
 }
 
 sub get_wobble_gc {
