@@ -262,7 +262,7 @@ sub get_feature_counts {
 #            name  => $row->[1],
 #        };
 #    }
-	my %feature_counts = CoGe::Core::Features::get_feature_counts(dataset_id => $dsid);
+	my %feature_counts = CoGe::Core::Features::get_type_counts(dataset => $dsid);
 	my $feats;
 	foreach my $key (keys %feature_counts) {
 		$feats->{$types->{$key}} = {
@@ -390,8 +390,8 @@ sub get_codon_usage {
     my $gstid = $opts{gstid};
     return unless $dsid || $dsgid;
 
-    my $search = { "feature_type.name" => "CDS" };
-    $search->{"me.chromosome"} = $chr if defined $chr;
+#    my $search = { "feature_type.name" => "CDS" };
+#    $search->{"me.chromosome"} = $chr if defined $chr;
 
 #    my (@items, @datasets);
     my (@datasets);
@@ -426,19 +426,20 @@ sub get_codon_usage {
 
     foreach my $ds (@datasets) {
         foreach my $feat (
-            $ds->features(
-                $search,
-                {
-                    join => [
-                        "feature_type", 'locations',
-                        { 'dataset' => { 'dataset_connectors' => 'genome' } }
-                    ],
-                    prefetch => [
-                        'locations',
-                        { 'dataset' => { 'dataset_connectors' => 'genome' } }
-                    ]
-                }
-            )
+#            $ds->features(
+#                $search,
+#                {
+#                    join => [
+#                        "feature_type", 'locations',
+#                        { 'dataset' => { 'dataset_connectors' => 'genome' } }
+#                    ],
+#                    prefetch => [
+#                        'locations',
+#                        { 'dataset' => { 'dataset_connectors' => 'genome' } }
+#                    ]
+#                }
+#            )
+				CoGe::Core::Features::get_features(dataset => $ds->id, type => 3); # 3 is feature_type_id for CDS
           )
         {
 #            my $seq = substr(

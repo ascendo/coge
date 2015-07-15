@@ -26,12 +26,50 @@ LICENSE file included with this module.
 use strict;
 use warnings;
 
+use CoGe::Accessory::genetic_code;
 use CoGe::Accessory::Web qw(get_defaults);
 use CoGeX;
 use Data::Dumper;
 use DBI;
 use JSON::XS;
 use LWP::UserAgent;
+
+use base 'Class::Accessor';
+__PACKAGE__->mk_accessors( '_genomic_sequence', 'gst', 'dsg', 'trans_type' ); #_genomic_sequence =>place to store the feature's genomic sequence with no up and down stream stuff
+
+################################################ subroutine header begin ##
+
+=head2 codon_frequency
+
+ Usage     :
+ Purpose   :
+ Returns   :
+ Argument  : gstid - optional
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub codon_frequency {
+	my $self      = shift;
+	my %opts      = @_;
+	my $gstid     = $opts{gstid};
+	my ( $code, $code_type ) = $self->genetic_code;
+	my %codon = map { $_ => 0 } keys %$code;
+	my $seq = $self->genomic_sequence( gstid => $gstid );
+	my $x   = 0;
+
+	while ( $x < CORE::length($seq) ) {
+		$codon{ uc( substr( $seq, $x, 3 ) ) }++;
+		$x += 3;
+	}
+	return \%codon, $code_type;
+}
 
 ################################################ subroutine header begin ##
 
@@ -234,15 +272,15 @@ sub get_ids {
 
 ################################################ subroutine header begin ##
 
-=head2 get_feature_counts
+=head2 genetic_code
 
  Usage     :
- Purpose   : get the counts for each different feature type
- Returns   : a hash of feature_type_id => count
- Argument  : dataset_id - required
- 			 chromosome - optional, to only return features from one chromosome
+ Purpose   :
+ Returns   :
+ Argument  :
  Throws    :
  Comments  :
+           :
 
 See Also   :
 
@@ -250,17 +288,53 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub get_feature_counts {
-	my %opts      = @_;
-	my $json_xs = JSON::XS->new->allow_nonref;
-	print STDERR $json_xs->encode(\%opts);
-	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":{"term":' . $json_xs->encode(\%opts) . '}}},"size":1000000}');
-	my $o = $json_xs->decode($json);
-	my %counts;
-	foreach (@{$o->{hits}->{hits}}) {
-		$counts{$_->{_source}->{type}}++;
+sub genetic_code {
+	my $self       = shift;
+	my %opts       = @_;
+	my $trans_type = $opts{trans_type};
+	$trans_type = $self->trans_type unless $trans_type;
+	unless ($trans_type) {
+		my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
+		my $annotation = $dbh->selectrow_arrayref('SELECT annotation FROM feature_annotation WHERE feature_id=' . $self->{id} . ' AND annotation_type_id=10973'); # 10973 is id for annotation type transl_table
+		$trans_type = $annotation->[0] if ($annotation);
 	}
-	return %counts;
+
+	unless ($trans_type) {
+		my $org_name = $self->organism->name;
+		my $org_desc = $self->organism->description;
+		$trans_type = 4  if $org_desc =~ /Mycoplasma/;
+		$trans_type = 11 if $org_desc =~ /Bacteria/;
+		$trans_type = 11
+		  if $org_name =~ /plastid/i || $org_name =~ /chloroplast/i;
+		$trans_type = 15 if $org_desc =~ /Blepharisma/;
+		$trans_type = 6  if $org_desc =~ /Ciliate/;
+		$trans_type = 6  if $org_desc =~ /Dasycladacean/;
+		$trans_type = 6  if $org_desc =~ /Hexamitidae/;
+		$trans_type = 10 if $org_desc =~ /Euploitid/;
+		$trans_type = 22
+		  if $org_desc =~ /Scenedesmus/ && $org_name =~ /mitochondri/i;
+		$trans_type = 9
+		  if $org_desc =~ /Echinodermata/ && $org_name =~ /mitochondri/i;
+		$trans_type = 2
+		  if $org_desc =~ /Vertebra/ && $org_name =~ /mitochondri/i;
+		$trans_type = 5
+		  if $org_desc !~ /Vertebra/
+		  && $org_desc =~ /Metazoa/
+		  && $org_name =~ /mitochondri/;
+		$trans_type = 13
+		  if $org_desc =~ /Ascidiacea/ && $org_name =~ /mitochondri/i;
+		$trans_type = 13
+		  if $org_desc =~ /Thraustochytrium/ && $org_name =~ /mitochondri/i;
+		$trans_type = 16
+		  if $org_desc =~ /Chlorophyta/ && $org_name =~ /mitochondri/i;
+		$trans_type = 21
+		  if $org_desc =~ /Trematoda/ && $org_name =~ /mitochondri/i;
+		$trans_type = 3 if $org_desc =~ /Fungi/ && $org_name =~ /mitochondri/i;
+		$trans_type = 1 unless $trans_type;
+	}
+	$self->trans_type($trans_type);
+	my $code = code($trans_type);
+	return ( $code->{code}, $code->{name} );
 }
 
 ################################################ subroutine header begin ##
@@ -270,7 +344,7 @@ sub get_feature_counts {
  Usage     : 
  Purpose   : get all features for a dataset
  Returns   : array of feature hashes
- Argument  : dataset_id - required
+ Argument  : dataset - required, id of the dataset
  			 chromosome - optional, to only return features from one chromosome
  			 type - optional, feature_type_id, to only return features of the specified type
  Throws    :
@@ -283,15 +357,45 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_features {
-	my %opts      = @_;
-	my $json_xs = JSON::XS->new->allow_nonref;
-	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":{"term":' . $json_xs->encode(\%opts) . '}}},"size":1000000}');
-	my $o = $json_xs->decode($json);
+	my %opts = @_;
+	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":{"term":' . encode_json(\%opts) . '}}},"size":1000000}');
+	my $o = decode_json($json);
 	my @hits;
 	foreach (@{$o->{hits}->{hits}}) {
-		push (@hits, $_->{_source});
+		my $feature = $_->{_source};
+		$feature->{id} = $_->{_id};
+		push (@hits, bless $feature);
 	}
 	return @hits;
+}
+
+################################################ subroutine header begin ##
+
+=head2 get_type_counts
+
+ Usage     :
+ Purpose   : get the counts for each different feature type
+ Returns   : a hash of feature_type_id => count
+ Argument  : dataset - required, id of the dataset
+ 			 chromosome - optional, to only return features from one chromosome
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_type_counts {
+	my %opts = @_;
+	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":{"term":' . encode_json(\%opts) . '}}},"aggs":{"count":{"terms":{"field":"type"}}}}');
+	my $o = decode_json($json);
+	my %counts;
+	foreach (@{$o->{aggregations}->{count}->{buckets}}) {
+		$counts{$_->{key}} = $_->{doc_count};
+	}
+	return %counts;
 }
 
 ################################################ subroutine header begin ##
@@ -332,6 +436,32 @@ sub init {
      }
  }));
  	elasticsearch_post('sequence/sequence/1','{"iid": 0}');
+}
+
+################################################ subroutine header begin ##
+
+=head2 organism
+
+ Usage     : 
+ Purpose   :
+ Returns   : 
+ Argument  : 
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub organism {
+	my $self = shift;
+	my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
+	my $genome = $dbh->selectrow_arrayref('SELECT genome_id FROM dataset_connector WHERE dataset_id=' . $self->{dataset});
+	my $organism = $dbh->selectrow_arrayref('SELECT organism_id FROM genome WHERE genome_id =' . $genome->[0]);
+	my $values = $dbh->selectrow_arrayref('SELECT name,description FROM organism WHERE organism_id =' . $organism->[0]);
+	return (name => $values->[0], description => $values->[1]);
 }
 
 1;
