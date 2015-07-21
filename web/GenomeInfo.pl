@@ -10,7 +10,7 @@ use CoGe::Accessory::IRODS qw(irods_iput irods_imeta);
 use CoGe::Builder::CommonTasks;
 use CoGe::Core::Chromosomes;
 use CoGe::Core::Experiment qw(experimentcmp);
-use CoGe::Core::Features;
+use CoGe::Core::Features qw(get_features get_type_counts);
 use CoGe::Core::Genome;
 use CoGe::Core::Storage;
 
@@ -262,7 +262,7 @@ sub get_feature_counts {
 #            name  => $row->[1],
 #        };
 #    }
-	my %feature_counts = CoGe::Core::Features::get_type_counts(dataset => $dsid);
+	my %feature_counts = get_type_counts(dataset => $dsid);
 	my $feats;
 	foreach my $key (keys %feature_counts) {
 		$feats->{$types->{$key}} = {
@@ -439,7 +439,7 @@ sub get_codon_usage {
 #                    ]
 #                }
 #            )
-				CoGe::Core::Features::get_features(dataset => $ds->id, type => 3); # 3 is feature_type_id for CDS
+				get_features(dataset => $ds->id, type => 3) # 3 is feature_type_id for CDS
           )
         {
 #            my $seq = substr(
