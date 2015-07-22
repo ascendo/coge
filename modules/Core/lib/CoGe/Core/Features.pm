@@ -31,7 +31,7 @@ use warnings;
 
 use CoGe::Accessory::genetic_code;
 use CoGe::Accessory::Web qw(get_defaults);
-use CoGe::Core::Elasticsearch qw(elasticsearch_get elasticsearch_post);
+use CoGe::Core::Elasticsearch qw(build_filter elasticsearch_get elasticsearch_post);
 use CoGeX;
 use Data::Dumper;
 use DBI;
@@ -78,7 +78,7 @@ sub clean_locations {
  Usage     :
  Purpose   :
  Returns   :
- Argument  : gstid - optional
+ Argument  :
  Throws    :
  Comments  :
            :
@@ -92,8 +92,11 @@ See Also   :
 sub codon_frequency {
 	my $self      = shift;
 	my %opts      = @_;
+	my $counts    = $opts{counts};
+	my $code      = $opts{code};
+	my $code_type = $opts{code_type};
 	my $gstid     = $opts{gstid};
-	my ( $code, $code_type ) = $self->genetic_code;
+	( $code, $code_type ) = $self->genetic_code unless $code;
 	my %codon = map { $_ => 0 } keys %$code;
 	my $seq = $self->genomic_sequence( gstid => $gstid );
 	my $x   = 0;
@@ -102,7 +105,19 @@ sub codon_frequency {
 		$codon{ uc( substr( $seq, $x, 3 ) ) }++;
 		$x += 3;
 	}
-	return \%codon, $code_type;
+	if ($counts) {
+		return \%codon, $code_type;
+	}
+	else {
+		my $total = 0;
+		foreach ( values %codon ) {
+			$total += $_;
+		}
+		foreach my $codon ( keys %codon ) {
+			$codon{$codon} = sprintf( "%.4f", ( $codon{$codon} / $total ) );
+		}
+		return ( \%codon, $code_type );
+	}
 }
 
 ################################################ subroutine header begin ##
@@ -200,8 +215,20 @@ sub copy_rows {
 			}
 			$json .= '{"start":' . $location->[0] . ',"stop":' . $location->[1] . ',"strand":' . $location->[2] . ',"chromosome":"' . $location->[3] . '"}';
 		}
+		$json .= '],"annotations":[';
+	    my $annotations = $dbh->prepare('SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id=' . $feature_id);
+	    $annotations->execute;
+		$first = 1;
+	    while (my $annotation = $annotations->fetchrow_arrayref) {
+			if ($first) {
+				$first = 0;
+			} else {
+				$json .= ',';
+			}
+			$json .= '{"annotation":' . $json_xs->encode($annotation->[0]) . ',"type":' . $annotation->[1] . ',"link":' . $json_xs->encode($annotation->[2]) . '}';
+		}
 		$json .= ']}';
-		print STDERR $feature_id . ' ';
+		print $feature_id . ' ';
 		elasticsearch_post('coge/features/' . $feature_id, $json);
 	}
 	
@@ -287,8 +314,14 @@ sub genetic_code {
 	$trans_type = $self->trans_type unless $trans_type;
 	unless ($trans_type) {
 		my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
-		my $annotation = $dbh->selectrow_arrayref('SELECT annotation FROM feature_annotation WHERE feature_id=' . $self->{id} . ' AND annotation_type_id=10973'); # 10973 is id for annotation type transl_table
-		$trans_type = $annotation->[0] if ($annotation);
+		foreach my $annotation (@{$self->{annotations}}) {
+			if ($annotation->{type} == 10973) { # 10973 is id for annotation type transl_table
+				$trans_type = $annotation->{annotation};
+				last;
+			}
+		}
+#		my $annotation = $dbh->selectrow_arrayref('SELECT annotation FROM feature_annotation WHERE feature_id=' . $self->{id} . ' AND annotation_type_id=10973'); # 10973 is id for annotation type transl_table
+#		$trans_type = $annotation->[0] if ($annotation);
 	}
 
 	unless ($trans_type) {
@@ -464,7 +497,7 @@ See Also   :
 
 sub get_features {
 	my %opts = @_;
-	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":{"term":' . encode_json(\%opts) . '}}},"size":1000000}');
+	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":' . build_filter(%opts) . '}},"size":1000000}');
 	my $o = decode_json($json);
 	my @hits;
 	foreach (@{$o->{hits}->{hits}}) {

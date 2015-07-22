@@ -397,9 +397,6 @@ sub get_codon_usage {
     my $gstid = $opts{gstid};
     return unless $dsid || $dsgid;
 
-#    my $search = { "feature_type.name" => "CDS" };
-#    $search->{"me.chromosome"} = $chr if defined $chr;
-
 #    my (@items, @datasets);
     my (@datasets);
     if ($dsid) {
@@ -431,6 +428,9 @@ sub get_codon_usage {
     my $feat_count  = 0;
     my ( $code, $code_type );
 
+#    my $search = { "feature_type.name" => "CDS" };
+#    $search->{"me.chromosome"} = $chr if defined $chr;
+
     foreach my $ds (@datasets) {
         foreach my $feat (
 #            $ds->features(
@@ -458,6 +458,7 @@ sub get_codon_usage {
             $feat_count++;
             ( $code, $code_type ) = $feat->genetic_code() unless $code;
             my ($codon) = $feat->codon_frequency( counts => 1 );
+			my @c = map { [ $_, $codon->{$_} ] } sort keys %$codon;
             grep { $codon_total += $_ } values %$codon;
             grep { $codons{$_}  += $codon->{$_} } keys %$codon;
             print STDERR ".($feat_count)" if !$feat_count % 10;
