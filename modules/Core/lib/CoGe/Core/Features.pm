@@ -108,8 +108,7 @@ sub codon_frequency {
 	}
 	if ($counts) {
 		return \%codon, $code_type;
-	}
-	else {
+	} else {
 		my $total = 0;
 		foreach ( values %codon ) {
 			$total += $_;

@@ -450,7 +450,7 @@ sub get_codon_usage {
 #            $feat->genomic_sequence( seq => $seq );
             $feat_count++;
             ( $code, $code_type ) = $feat->genetic_code() unless $code;
-            my ($codon) = $feat->codon_frequency( counts => 1 );
+            my ($codon) = $feat->codon_frequency( counts => 1, code => $code, code_type => $code_type );
 			my @c = map { [ $_, $codon->{$_} ] } sort keys %$codon;
             grep { $codon_total += $_ } values %$codon;
             grep { $codons{$_}  += $codon->{$_} } keys %$codon;
@@ -476,9 +476,11 @@ sub get_wobble_gc {
     my $max   = $opts{max};     #limit results with gc values smaller than $max;
     my $hist_type = $opts{hist_type};
     return "error" unless $dsid || $dsgid;
-    my $search;
-    $search = { "feature_type_id" => 3 };
-    $search->{"me.chromosome"} = $chr if defined $chr;
+
+# apprently not used
+#    my $search;
+#    $search = { "feature_type_id" => 3 };
+#    $search->{"me.chromosome"} = $chr if defined $chr;
 
     my $genome = $DB->resultset('Genome')->find($dsgid);
     my $raw = get_wobble_histogram($genome);
@@ -580,9 +582,11 @@ sub get_wobble_gc_diff {
     my $chr   = $opts{chr};
     my $gstid = $opts{gstid};    #genomic sequence type id
     return "error", " " unless $dsid || $dsgid;
-    my $search;
-    $search = { "feature_type_id" => 3 };
-    $search->{"me.chromosome"} = $chr if defined $chr;
+
+# apprently not used
+#    my $search;
+#    $search = { "feature_type_id" => 3 };
+#    $search->{"me.chromosome"} = $chr if defined $chr;
     my @data;
     my @dsids;
     push @dsids, $dsid if $dsid;
