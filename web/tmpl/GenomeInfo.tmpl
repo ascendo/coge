@@ -1197,6 +1197,7 @@ function get_content_dialog(id, request, chromosome) {
         },
         dataType: "html",
         success: function(html) {
+        	console.log(html);
             elem.html(html).slideDown();
         }
     })
