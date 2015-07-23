@@ -35,6 +35,7 @@ use CoGe::Core::Elasticsearch qw(build_filter elasticsearch_get elasticsearch_po
 use CoGeX;
 use Data::Dumper;
 use DBI;
+use Encode qw(encode);
 use JSON::XS;
 
 use base 'Class::Accessor';
@@ -194,9 +195,9 @@ sub copy_rows {
 			} else {
 				$json .= ',';
 			}
-			$json .= '{"name":' . $json_xs->encode($name->[0]);
+			$json .= '{"name":' . $json_xs->encode(encode("UTF-8", $name->[0]));
 			if ($name->[1]) {
-				$json .= ',"description":' . $json_xs->encode($name->[1]);
+				$json .= ',"description":' . $json_xs->encode(encode("UTF-8", $name->[1]));
 			}
 			if ($name->[2]) {
 				$json .= ',"primary":true';
@@ -225,7 +226,11 @@ sub copy_rows {
 			} else {
 				$json .= ',';
 			}
-			$json .= '{"annotation":' . $json_xs->encode($annotation->[0]) . ',"type":' . $annotation->[1] . ',"link":' . $json_xs->encode($annotation->[2]) . '}';
+			$json .= '{"annotation":' . $json_xs->encode(encode("UTF-8", $annotation->[0])) . ',"type":' . $annotation->[1];
+			if ($annotation->[2]) {
+				$json .= ',"link":' . $json_xs->encode(encode("UTF-8", $annotation->[2]));
+			}
+			$json .= '}';
 		}
 		$json .= ']}';
 		print $feature_id . ' ';
@@ -313,15 +318,12 @@ sub genetic_code {
 	my $trans_type = $opts{trans_type};
 	$trans_type = $self->trans_type unless $trans_type;
 	unless ($trans_type) {
-		my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
 		foreach my $annotation (@{$self->{annotations}}) {
 			if ($annotation->{type} == 10973) { # 10973 is id for annotation type transl_table
 				$trans_type = $annotation->{annotation};
 				last;
 			}
 		}
-#		my $annotation = $dbh->selectrow_arrayref('SELECT annotation FROM feature_annotation WHERE feature_id=' . $self->{id} . ' AND annotation_type_id=10973'); # 10973 is id for annotation type transl_table
-#		$trans_type = $annotation->[0] if ($annotation);
 	}
 
 	unless ($trans_type) {
@@ -497,8 +499,10 @@ See Also   :
 
 sub get_features {
 	my %opts = @_;
-	my $json = elasticsearch_post('coge/features/_search','{"query":{"filtered":{"filter":' . build_filter(%opts) . '}},"size":1000000}');
+	my $json = elasticsearch_post('coge/features/_search?search_type=scan&scroll=1m', '{"query":{"filtered":{"filter":' . build_filter(%opts) . '}},"size":1000000}');
 	my $o = decode_json($json);
+	$json = elasticsearch_post('_search/scroll?scroll=1m', $o->{_scroll_id});
+	$o = decode_json($json);
 	my @hits;
 	foreach (@{$o->{hits}->{hits}}) {
 		my $feature = $_->{_source};

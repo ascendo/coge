@@ -47,7 +47,6 @@ sub startup {
         ->name("datasets-genomes")
         ->to("dataset#genomes", id => undef);
 
-
     # Experiment routes
     $r->get("/experiments/search/#term")
         ->name("experiments-search")
@@ -108,6 +107,15 @@ sub startup {
     $r->get("/jobs/:id/results/:name" => { id => qr/\d+/, name => qr/\w+/ })
         ->name("jobs-results")
         ->to("job#results", id => undef, name => undef);
+
+    # Log routes -- not documented, only for internal use
+#    $r->get("/logs/search/#term")
+#        ->name("logs-search")
+#        ->to("log#search", term => undef);
+        
+    $r->get("/logs/:type/:id" => [type => qr/\w+/, id => qr/\d+/])
+        ->name("logs-fetch")
+        ->to("log#fetch", id => undef, type => undef);
 
     # IRODS routes
     $r->get("/irods/list/")

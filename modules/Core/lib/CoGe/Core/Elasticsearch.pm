@@ -27,7 +27,7 @@ sub build_filter {
 	my $size = keys %opts;
 	my $json;
 	if ($size > 1) {
-		$json = '"{and":[';
+		$json = '{"and":[';
 	}
 	my $first = 1;
 	for my $key (keys %opts) {
