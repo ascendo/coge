@@ -33,13 +33,14 @@ $JEX =
 
 $MAX_SEARCH_RESULTS = 400;
 
-my $node_types = CoGeX::node_types();
+our $node_types = CoGeX::node_types();
 my $filename = '/home/franka1/repos/coge/web/admin_error.log';
 open(my $fh, '>', $filename); #or die "Could not open file '$filename' $!";
 
 #print STDERR $node_types->{user};
 
 %FUNCTION = (
+	user_is_admin					=> \&user_is_admin,
 	search_users                    => \&search_users,
 	search_stuff                    => \&search_stuff,
 	user_info                       => \&user_info,
@@ -91,12 +92,12 @@ sub gen_html {
 
 sub gen_body {
 	# Hide this page if the user is not an Admin
-	unless ( $USER->is_admin ) {
-		my $template =
-		  HTML::Template->new( filename => $P->{TMPLDIR} . "Admin.tmpl" );
-		$template->param( ADMIN_ONLY => 1 );
-		return $template->output;
-	}
+	#unless ( $USER->is_admin ) {
+	#	my $template =
+	#	  HTML::Template->new( filename => $P->{TMPLDIR} . "Admin.tmpl" );
+	#	$template->param( ADMIN_ONLY => 1 );
+	#	return $template->output;
+	#}
 
 	my $template =
 	  HTML::Template->new( filename => $P->{TMPLDIR} . 'Admin.tmpl' );
@@ -105,6 +106,10 @@ sub gen_body {
 	#print STDERR $node_types->{user};
 	#$template->param( ITEM_TYPE_USER => $node_types->{user} );
 	return $template->output;
+}
+
+sub user_is_admin {
+	return $USER->is_admin;
 }
 
 sub search_stuff {
@@ -260,14 +265,16 @@ sub search_stuff {
 		);
 
 		foreach ( sort { $a->id cmp $b->id } @genomes ) {
-			push @results,
-			  {
-				'type'          => "genome",
-				'label'         => $_->info,
-				'id'            => $_->id,
-				'deleted'       => $_->deleted,
-				'restricted'    => $_->restricted
-			  };
+			if ($USER->has_access_to_genome($_)) {
+				push @results,
+				  {
+					'type'          => "genome",
+					'label'         => $_->info,
+					'id'            => $_->id,
+					'deleted'       => $_->deleted,
+					'restricted'    => $_->restricted
+				  };
+			}
 		}
 
 		# Perform direct genome search (by genome ID)
@@ -280,14 +287,16 @@ sub search_stuff {
 		  ->search( { -and => [ @genIDArray, @restricted, @deleted, ], } );
 
 		foreach ( sort { $a->id cmp $b->id } @genomeIDs ) {
-			push @results,
-			  {
-				'type'          => "genome",
-				'label'         => $_->info,
-				'id'            => $_->id,
-				'deleted'       => $_->deleted,
-				'restricted'    => $_->restricted
-			  };
+			if ($USER->has_access_to_genome($_)) {
+				push @results,
+				  {
+					'type'          => "genome",
+					'label'         => $_->info,
+					'id'            => $_->id,
+					'deleted'       => $_->deleted,
+					'restricted'    => $_->restricted
+				  };
+			}
 		}
 	}
 	
@@ -321,14 +330,16 @@ sub search_stuff {
 		  ->search( { -and => [ @expArray, @restricted, @deleted, ], } );
 
 		foreach ( sort { $a->name cmp $b->name } @experiments ) {
-			push @results,
-			  {
-				'type'          => "experiment",
-				'label'         => $_->name,
-				'id'            => $_->id,
-				'deleted'       => $_->deleted,
-				'restricted'    => $_->restricted
-			  };
+			if ($USER->has_access_to_experiment($_)) {
+				push @results,
+				  {
+					'type'          => "experiment",
+					'label'         => $_->name,
+					'id'            => $_->id,
+					'deleted'       => $_->deleted,
+					'restricted'    => $_->restricted
+				  };
+			}
 		}
 	}
 
@@ -362,14 +373,16 @@ sub search_stuff {
 		  ->search( { -and => [ @noteArray, @restricted, @deleted, ], } );
 
 		foreach ( sort { $a->name cmp $b->name } @notebooks ) {
-			push @results,
-			  {
-				'type'          => "notebook",
-				'label'         => $_->info,
-				'id'            => $_->id,
-				'deleted'       => $_->deleted,
-				'restricted'    => $_->restricted
-			  };
+			if ($USER->has_access_to_list($_)) {
+				push @results,
+				  {
+					'type'          => "notebook",
+					'label'         => $_->info,
+					'id'            => $_->id,
+					'deleted'       => $_->deleted,
+					'restricted'    => $_->restricted
+				  };
+			}
 		}
 	}
 	
@@ -447,46 +460,50 @@ sub user_info {
 		# Find notebooks
 		foreach ( $currentUser->child_connectors( { child_type => 1 } ) ) {
 			$child = $_->child;
-			
-			push @current,
-			  {
-				'type'          => "notebook",
-				'label'         => $child->info,
-				'id'            => $child->id,
-				'role'          => $_->role_id,
-				'deleted'        => $child->deleted,
-				'restricted'    => $child->restricted
-			  };
+			if ($USER->has_access_to_list($child)) {
+				push @current,
+				  {
+					'type'          => "notebook",
+					'label'         => $child->info,
+					'id'            => $child->id,
+					'role'          => $_->role_id,
+					'deleted'        => $child->deleted,
+					'restricted'    => $child->restricted
+				  };
+			}
 		}
 
 		# Find genomes
 		foreach ( $currentUser->child_connectors( { child_type => 2 } ) ) {
 			$child = $_->child;
-			push @current,
-			  {
-				'type'          => "genome",
-				'label'         => $child->info,
-				'id'            => $child->id,
-				'role'          => $_->role_id,
-				'deleted'       => $child->deleted,
-                'restricted'    => $child->restricted
-			  };
+			if ($USER->has_access_to_genome($child)) {
+				push @current,
+				  {
+					'type'          => "genome",
+					'label'         => $child->info,
+					'id'            => $child->id,
+					'role'          => $_->role_id,
+					'deleted'       => $child->deleted,
+	                'restricted'    => $child->restricted
+				  };
+			}
 		}
 
 		# Find experiments
 		foreach ( $currentUser->child_connectors( { child_type => 3 } ) ) {
 			$child = $_->child;
-			push @current,
-			  {
-				'type'          => "experiment",
-				'label'         => $child->name,
-				'id'            => $child->id,
-				'info'          => $child->info,
-				'role'          => $_->role_id,
-				'deleted'       => $child->deleted,
-                'restricted'    => $child->restricted
-			  };
-
+			if ($USER->has_access_to_experiment($child)) {
+				push @current,
+				  {
+					'type'          => "experiment",
+					'label'         => $child->name,
+					'id'            => $child->id,
+					'info'          => $child->info,
+					'role'          => $_->role_id,
+					'deleted'       => $child->deleted,
+	                'restricted'    => $child->restricted
+				  };
+			}
 		}
 
 		# Find users if searching a user group
@@ -1100,7 +1117,7 @@ sub add_users_to_group {
                 db          => $coge,
                 user_id     => $USER->id,
                 page        => "Admin",
-                description => 'added user ' . $user->info_html . ' to group ' . $target_group->info_html,
+                description => 'added user ' . $user->info . ' to group ' . $target_group->info_html,
                 parent_id   => $target_id,
                 parent_type => 6 #FIXME magic number
             );
@@ -1153,7 +1170,7 @@ sub remove_user_from_group {
             db          => $coge,
             user_id     => $USER->id,
             page        => "Admin",
-            description => 'removed user ' . $user->info_html . ' from group ' . $target_group->info_html,
+            description => 'removed user ' . $user->info . ' from group ' . $target_group->info_html,
             parent_id   => $target_id,
             parent_type => 6
         );
@@ -1203,7 +1220,7 @@ sub get_jobs_for_user {
             #{ description => { 'not like' => 'page access' } },
             {
                 type     => { '!='  => 0 },
-                workflow_id  => { "!=" => undef}
+                parent_id  => { "!=" => undef}
             },
             { order_by => { -desc => 'time' } },
         );
@@ -1212,7 +1229,7 @@ sub get_jobs_for_user {
         @entries = $coge->resultset('Log')->search(
             {
                 user_id => $USER->id,
-                workflow_id  => { "!=" => undef},
+                parent_id  => { "!=" => undef},
 
                 #{ description => { 'not like' => 'page access' } }
                 type => { '!=' => 0 }
@@ -1222,7 +1239,7 @@ sub get_jobs_for_user {
     }
 
     my %users = map { $_->user_id => $_->name } $coge->resultset('User')->all;
-    my @workflows = map { $_->workflow_id } @entries;
+    my @workflows = map { $_->parent_id } @entries;
     
     #my $workflows = $JEX->find_workflows(\@workflows, 'running');
     my $workflows;
@@ -1259,14 +1276,14 @@ sub get_jobs_for_user {
 
     my $index = 1;
     foreach (@entries) {
-        my $entry = $workflow_results{$_->workflow_id};
+        my $entry = $workflow_results{$_->parent_id};
 
         # A log entry must correspond to a workflow
         next unless $entry;
         
         push @job_items, {
             id => int($index++),
-            workflow_id => $_->workflow_id,
+            parent_id => $_->parent_id,
             user  => $users{$_->user_id} || "public",
             tool  => $_->page,
             link  => $_->link,
@@ -1277,7 +1294,7 @@ sub get_jobs_for_user {
 
     # Filter repeated entries
     foreach (reverse @job_items) {
-        my $wid = $_->{workflow_id};
+        my $wid = $_->{parent_id};
         next if (defined $wid and defined $workflow_results{$wid}{seen});
         $workflow_results{$wid}{seen}++ if (defined $wid);
 
@@ -2030,13 +2047,95 @@ sub get_total_table {
 
 ####
 #TAXONOMY STUFF
-my %taxonomic_tree;
 
 sub gen_tree_json {
-	%taxonomic_tree  = (
+	my %taxonomic_tree  = (
 		name => "root", 
 		children => [],
 	);
+	
+	### 
+	# Helper functions:
+	###
+
+	*check_tree = sub {
+		my $search_term = shift;
+		if (scalar(@_) == 0) {
+			return undef;
+		}
+		
+		my @new_roots;
+		foreach my $root (@_) {
+			foreach my $child (@{$root->{children}}) {
+				push (@new_roots, $child);
+				if(lc $search_term eq lc $child->{name}) {
+					return $child;
+				}
+			}
+		}
+		return check_tree($search_term, @new_roots);
+	};
+	
+	*gen_subtree = sub {
+		my @array = @{$_[0]};
+		if (scalar(@array) > 0) {
+			my $hash = {
+				name => $array[0],
+				children => [],
+			};
+			#print $fh "$array[0]\n";
+			shift @array;
+			if (scalar(@array) > 0) {
+				push ($hash->{children}, gen_subtree(\@array));
+			}
+			return $hash;
+		}
+	};
+	
+	*add_fix = sub {
+		my $add_tree = $_[0];
+		my $move_tree;
+		my $i;
+		for ($i = scalar(@{$taxonomic_tree{children}} - 1); $i > -1; $i--) {
+			if ((lc $add_tree->{name}) eq (lc @{$taxonomic_tree{children}}[$i]->{name})) {
+				#print $fh "Inconsistency Detected\n";
+				$move_tree = splice(@{$taxonomic_tree{children}}, $i, 1);
+				
+				foreach my $child (@{$move_tree->{children}}) {
+					#print $fh "Moving: $child->{name} to $add_tree->{name}\n";
+					add_to_tree($add_tree, $child);
+				}
+			}
+		}
+		#check for further inconsistencies
+		foreach my $child (@{$add_tree->{children}}) {
+			add_fix($child);
+		}
+	};
+	
+	*add_to_tree = sub {
+		my $root = $_[0];
+		my $sub_tree = $_[1];
+	    my $root_children = \@{$root->{children}}; #array reference
+		my $top_value = $sub_tree->{name};
+		my $find = check_tree($top_value, $root);
+		if (!$find) {
+			#check for inconsistencies
+			add_fix($sub_tree);
+			
+			#add the subtree as a child of the root
+			push ($root_children, $sub_tree);
+		} else {
+			#recurse to the next level of the tree
+			foreach my $child (@{$sub_tree->{children}}) {
+				add_to_tree($find, $child);
+			}
+		}
+	};
+	
+	###
+	# Main code
+	###
 
 	my ( $db, $user, $conf ) = CoGe::Accessory::Web->init;
 	my @organism_descriptions = CoGeDBI::get_table($db->storage->dbh, 'organism', undef, {description => "\"%;%\""}, {description => " like "});
@@ -2056,81 +2155,6 @@ sub gen_tree_json {
 	}
     
 	return encode_json(\%taxonomic_tree);
-}
-
-sub check_tree {
-	my $search_term = shift;
-	if (scalar(@_) == 0) {
-		return undef;
-	}
-	
-	my @new_roots;
-	foreach my $root (@_) {
-		foreach my $child (@{$root->{children}}) {
-			push (@new_roots, $child);
-			if(lc $search_term eq lc $child->{name}) {
-				return $child;
-			}
-		}
-	}
-	return check_tree($search_term, @new_roots);
-}
-
-sub gen_subtree {
-	my @array = @{$_[0]};
-	if (scalar(@array) > 0) {
-		my $hash = {
-			name => $array[0],
-			children => [],
-		};
-		#print $fh "$array[0]\n";
-		shift @array;
-		if (scalar(@array) > 0) {
-			push ($hash->{children}, gen_subtree(\@array));
-		}
-		return $hash;
-	}
-}
-
-sub add_to_tree {
-	my $root = $_[0];
-	my $sub_tree = $_[1];
-    my $root_children = \@{$root->{children}}; #array reference
-	my $top_value = $sub_tree->{name};
-	my $find = check_tree($top_value, $root);
-	if (!$find) {
-		#check for inconsistencies
-		add_fix($sub_tree);
-		
-		#add the subtree as a child of the root
-		push ($root_children, $sub_tree);
-	} else {
-		#recurse to the next level of the tree
-		foreach my $child (@{$sub_tree->{children}}) {
-			add_to_tree($find, $child);
-		}
-	}
-}
-
-sub add_fix {
-	my $add_tree = $_[0];
-	my $move_tree;
-	my $i;
-	for ($i = scalar(@{$taxonomic_tree{children}} - 1); $i > -1; $i--) {
-		if ((lc $add_tree->{name}) eq (lc @{$taxonomic_tree{children}}[$i]->{name})) {
-			#print $fh "Inconsistency Detected\n";
-			$move_tree = splice(@{$taxonomic_tree{children}}, $i, 1);
-			
-			foreach my $child (@{$move_tree->{children}}) {
-				#print $fh "Moving: $child->{name} to $add_tree->{name}\n";
-				add_to_tree($add_tree, $child);
-			}
-		}
-	}
-	#check for further inconsistencies
-	foreach my $child (@{$add_tree->{children}}) {
-		add_fix($child);
-	}
 }
 
 if ($fh) {
