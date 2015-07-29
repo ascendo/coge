@@ -1,7 +1,9 @@
 package CoGe::Core::Elasticsearch;
 
-use Exporter 'import';
-@EXPORT_OK = qw(build_filter elasticsearch_get elasticsearch_post);
+BEGIN {
+	use Exporter 'import';
+	@EXPORT_OK = qw( build_filter build_terms_filter elasticsearch_get elasticsearch_post );
+}
 
 use LWP::UserAgent;
 
@@ -41,6 +43,45 @@ sub build_filter {
 	if ($size > 1) {
 		$json .= ']}';
 	}
+	return $json;
+}
+
+################################################ subroutine header begin ##
+
+=head2 build_terms_filter
+
+ Usage     : 
+ Purpose   :
+ Returns   : JSON for a filter of one or more terms 
+ Argument  : field, value(s)
+ Throws    :
+ Comments  : if more than one term is passed in, a "terms" filter will be built, otherwise a "term" filter will be built
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub build_terms_filter {
+	my $field = shift;
+	my $size = @_;
+
+	if ($size == 1) {
+		return '{"term":{"' . $field . '":' . shift . '}}';
+	}
+
+	my $json = '{"terms":{"' . $field . '":[';
+	my $first = 1;
+	for my $term (@_) {
+		if ($first) {
+			$first = 0;
+		} else {
+			$json .= ',';
+		}
+		$json .= '"' . $term . '"'; # note: doesn't yet encode values
+	}
+	$json .= ']}}';
 	return $json;
 }
 

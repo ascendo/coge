@@ -1,8 +1,10 @@
 package CoGe::Core::Features;
 
-use Exporter 'import';
-@EXPORT_OK = qw(get_features get_type_counts);
-  
+BEGIN {
+	use Exporter 'import';
+	our @EXPORT_OK = qw(get_features get_total_chromosomes_length get_type_count get_type_counts);
+}
+
 =head1 NAME
 
 CoGe::Core::Features
@@ -31,7 +33,7 @@ use warnings;
 
 use CoGe::Accessory::genetic_code;
 use CoGe::Accessory::Web qw(get_defaults);
-use CoGe::Core::Elasticsearch qw(build_filter elasticsearch_get elasticsearch_post);
+use CoGe::Core::Elasticsearch qw(build_filter build_terms_filter elasticsearch_get elasticsearch_post);
 use CoGeX;
 use Data::Dumper;
 use DBI;
@@ -39,7 +41,7 @@ use Encode qw(encode);
 use JSON::XS;
 
 use base 'Class::Accessor';
-__PACKAGE__->mk_accessors( '_genomic_sequence', 'gst', 'dsg', 'trans_type' ); #_genomic_sequence =>place to store the feature's genomic sequence with no up and down stream stuff
+__PACKAGE__->mk_accessors( 'chromosome', '_genomic_sequence', 'id', 'names', 'start', 'stop', 'strand', 'trans_type' ); #_genomic_sequence =>place to store the feature's genomic sequence with no up and down stream stuff
 
 ################################################ subroutine header begin ##
 
@@ -508,7 +510,56 @@ sub get_features {
 		$feature->{id} = $_->{_id};
 		push (@hits, bless $feature);
 	}
+	my $hits = @hits;
 	return @hits;
+}
+
+################################################ subroutine header begin ##
+
+=head2 get_total_chromosomes_length
+
+ Usage     :
+ Purpose   :
+ Returns   : the sum of the lengths of chromosomes
+ Argument  : id of the dataset
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_total_chromosomes_length {
+	my %opts = ( dataset => shift, type => 4 ); # 4 is feature_type_id of chromosomes
+	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_filter(%opts) . '}},"aggs":{"length":{"sum":{"field":"stop"}}}}');
+	my $o = decode_json($json);
+	return $o->{aggregations}->{length}->{value};
+}
+
+################################################ subroutine header begin ##
+
+=head2 get_type_count
+
+ Usage     :
+ Purpose   :
+ Returns   : the number of features of the passed in type for the dataset
+ Argument  : id of the dataset, type id
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_type_count {
+	my %opts = ( dataset => shift, type => shift );
+	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_filter(%opts) . '}}}');
+	my $o = decode_json($json);
+	return $o->{hits}->{total};
 }
 
 ################################################ subroutine header begin ##
@@ -516,10 +567,9 @@ sub get_features {
 =head2 get_type_counts
 
  Usage     :
- Purpose   : get the counts for each different feature type
+ Purpose   : get the counts for each different feature type for one or more datasets
  Returns   : a hash of feature_type_id => count
- Argument  : dataset - required, id of the dataset
- 			 chromosome - optional, to only return features from one chromosome
+ Argument  : id(s) of the dataset(s) - required
  Throws    :
  Comments  :
 
@@ -530,8 +580,7 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_type_counts {
-	my %opts = @_;
-	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":{"term":' . encode_json(\%opts) . '}}},"aggs":{"count":{"terms":{"field":"type"}}}}');
+	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_terms_filter('dataset', @_) . '}},"aggs":{"count":{"terms":{"field":"type"}}}}');
 	my $o = decode_json($json);
 	my %counts;
 	foreach (@{$o->{aggregations}->{count}->{buckets}}) {
@@ -591,16 +640,38 @@ sub reverse_complement {
 	my $self = shift;
 	my $seq  = shift;    # || $self->genomic_sequence;
 	if ( ref($self) =~ /Feature/ ) {
-		$seq = $self->genomic_sequence
-		  unless $seq;    #self seq unless we have a seq
-	}
-	else                  #we were passed a sequence without invoking self
-	{
+		$seq = $self->genomic_sequence unless $seq;    #self seq unless we have a seq
+	} else {                  #we were passed a sequence without invoking self
 		$seq = $self unless $seq;
 	}
 	my $rcseq = reverse($seq);
 	$rcseq =~ tr/ATCGatcg/TAGCtagc/;
 	return $rcseq;
+}
+
+################################################ subroutine header begin ##
+
+=head2 type
+
+ Usage     :
+ Purpose   :
+ Returns   : the type object for this feature
+ Argument  :
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub type {
+	my $self = shift;
+	return $self->{_type} if $self->{_type};
+
+	$self->{_type} = CoGeX->dbconnect(get_defaults())->resultset('FeatureType')->find($self->{type});
+	return $self->{_type};
 }
 
 1;

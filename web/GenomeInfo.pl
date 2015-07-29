@@ -203,12 +203,12 @@ sub gen_data {
 
 sub get_feature_counts {
     my %opts  = @_;
-    my $dsid  = $opts{dsid};
+#    my $dsid  = $opts{dsid};
     my $dsgid = $opts{dsgid};
-    my $gstid = $opts{gstid};
-    my $chr   = $opts{chr};
-    my $query;
-    my $name;
+#    my $gstid = $opts{gstid};
+#    my $chr   = $opts{chr};
+#    my $query;
+#    my $name;
 #    if ($dsid) {
 #        my $ds = $coge->resultset('Dataset')->find($dsid);
 #        $name  = "dataset " . $ds->name;
@@ -240,9 +240,7 @@ sub get_feature_counts {
 #    }
 
     my $dbh = $DB->storage->dbh;
-	if ($dsgid) {
-		$dsid = $dbh->selectrow_array('SELECT dataset_id FROM dataset_connector WHERE genome_id=' . $dsgid);
-	}
+    my $dsids = $dbh->selectcol_arrayref('SELECT dataset_id FROM dataset_connector WHERE genome_id=' . $dsgid);
 
 	# load type names
     my $sth = $dbh->prepare('SELECT feature_type_id,name FROM feature_type');
@@ -262,7 +260,7 @@ sub get_feature_counts {
 #            name  => $row->[1],
 #        };
 #    }
-	my %feature_counts = get_type_counts(dataset => $dsid);
+	my %feature_counts = get_type_counts(@$dsids);
 	my $feats;
 	foreach my $key (keys %feature_counts) {
 		$feats->{$types->{$key}} = {
@@ -273,11 +271,12 @@ sub get_feature_counts {
 	}
 
     my $gc_args;
-    $gc_args = "chr: '$chr'," if defined $chr;
-    $gc_args .= "dsid: $dsid," if $dsid; #set a var so that histograms are only calculated for the dataset and not hte genome
+#    $gc_args = "chr: '$chr'," if defined $chr;
+#    $gc_args .= "dsid: $dsid," if $dsid; #set a var so that histograms are only calculated for the dataset and not hte genome
     $gc_args .= "typeid: ";
-    my $feat_list_string = $dsid ? "dsid=$dsid" : "dsgid=$dsgid";
-    $feat_list_string .= ";chr=$chr" if defined $chr;
+#    my $feat_list_string = $dsid ? "dsid=$dsid" : "dsgid=$dsgid";
+    my $feat_list_string = "dsgid=$dsgid";
+#    $feat_list_string .= ";chr=$chr" if defined $chr;
     my $feat_string;
     $feat_string .= qq{<table style="padding: 2px; margin-bottom: 5px;">};
 
@@ -303,55 +302,57 @@ sub get_feature_counts {
         $feat_string .= "<td class='small link' onclick=\"window.open('FeatList.pl?$feat_list_string"
           . "&ftid="
           . $feats->{$type}{id}
-          . ";gstid=$gstid')\">FeatList";
+#          . ";gstid=$gstid')\">FeatList";
+          . ";gstid=')\">FeatList";
         $feat_string .= "<td>|</td>";
         $feat_string .= "<td class='small link' onclick=\"window.open('bin/get_seqs_for_feattype_for_genome.pl?ftid="
           . $feats->{$type}{id} . ";";
-        $feat_string .= "dsgid=$dsgid;" if $dsgid;
-        $feat_string .= "dsid=$dsid;"   if $dsid;
+        $feat_string .= "dsgid=$dsgid;"; # if $dsgid;
+#        $feat_string .= "dsid=$dsid;"   if $dsid;
         $feat_string .= "')\">Nuc Seqs</td>";
 
         my $fid = $feats->{$type}{id};
 
-        if ($dsgid) {
+#        if ($dsgid) {
             $feat_string .= qq{<td>|</td>}
             . qq{<td class="small link" onclick="export_features_to_irods($dsgid, $fid, true, 0);">}
             . qq{Export Nuc Seqs}
             . qq{</td>};
-        }
-        else {
-            $feat_string .= qq{<td>|</td>}
-            . qq{<td class="small link" onclick="export_features_to_irods($dsid, $fid, false, 0);">}
-            . qq{Export Nuc Seqs}
-            . qq{</td>};
-        }
+#        }
+#        else {
+#            $feat_string .= qq{<td>|</td>}
+#            . qq{<td class="small link" onclick="export_features_to_irods($dsid, $fid, false, 0);">}
+#            . qq{Export Nuc Seqs}
+#            . qq{</td>};
+#        }
 
         if ( $feats->{$type}{name} eq "CDS" ) {
             $feat_string .= "<td>|</td>";
             $feat_string .= "<td class='small link' onclick=\"window.open('bin/get_seqs_for_feattype_for_genome.pl?p=1;ftid="
               . $feats->{$type}{id};
-            $feat_string .= ";dsgid=$dsgid" if $dsgid;
-            $feat_string .= ";dsid=$dsid"   if $dsid;
+            $feat_string .= ";dsgid=$dsgid"; # if $dsgid;
+#            $feat_string .= ";dsid=$dsid"   if $dsid;
             $feat_string .= "')\">Prot Seqs";
 
-            if ($dsgid) {
+#            if ($dsgid) {
                 $feat_string .= qq{<td>|</td>}
                 . qq{<td class="small link" onclick="export_features_to_irods($dsgid, $fid, true, 1);">}
                 . qq{Export Prot Seqs}
                 . qq{</td>};
-            }
-            else {
-                $feat_string .= qq{<td>|</td>}
-                . qq{<td class="small link" onclick="export_features_to_irods($dsid, $fid, false, 1);">}
-                . qq{Export Prot Seqs}
-                . qq{</td>};
-            }
+#            }
+#            else {
+#                $feat_string .= qq{<td>|</td>}
+#                . qq{<td class="small link" onclick="export_features_to_irods($dsid, $fid, false, 1);">}
+#                . qq{Export Prot Seqs}
+#                . qq{</td>};
+#            }
         }
 
     }
 
     if ( $feats->{CDS} ) {
-        my $param = defined $chr ? $chr : "";
+#        my $param = defined $chr ? $chr : "";
+        my $param = "";
 
         # Wobble codon
         $feat_string .=qq{<tr><td colspan="13" class="small link" id="wobble_gc"}
@@ -425,6 +426,8 @@ sub get_codon_usage {
 #    $search->{"me.chromosome"} = $chr if defined $chr;
 
     foreach my $ds (@datasets) {
+	    my $search = { dataset => $ds->id, type => 3 }; # 3 is feature_type_id for CDS
+    	$search->{"chromosome"} = $chr if defined $chr;
         foreach my $feat (
 #            $ds->features(
 #                $search,
@@ -439,7 +442,7 @@ sub get_codon_usage {
 #                    ]
 #                }
 #            )
-				get_features(dataset => $ds->id, type => 3) # 3 is feature_type_id for CDS
+				get_features(%$search)
           )
         {
 #            my $seq = substr(
@@ -447,6 +450,8 @@ sub get_codon_usage {
 #                $feat->start - 1,
 #                $feat->stop - $feat->start + 1
 #            );
+
+# why is this called? results not assigned to anything
 #            $feat->genomic_sequence( seq => $seq );
             $feat_count++;
             ( $code, $code_type ) = $feat->genetic_code() unless $code;
@@ -1452,9 +1457,9 @@ sub get_aa_usage {
     my $gstid = $opts{gstid};
     return unless $dsid || $dsgid;
 
-    my $search;
-    $search = { "feature_type.name" => "CDS" };
-    $search->{"me.chromosome"} = $chr if defined $chr and $chr;
+#    my $search;
+#    $search = { "feature_type.name" => "CDS" };
+#    $search->{"me.chromosome"} = $chr if defined $chr and $chr;
 
     my (@items, @datasets);
     if ($dsid) {
@@ -1489,28 +1494,32 @@ sub get_aa_usage {
     my ( $code, $code_type );
 
     foreach my $ds (@datasets) {
+	    my $search = { dataset => $ds->id, type => 3 }; # 3 is feature_type_id for CDS
+    	$search->{"chromosome"} = $chr if $chr;
         foreach my $feat (
-            $ds->features(
-                $search,
-                {
-                    join => [
-                        "feature_type", 'locations',
-                        { 'dataset' => { 'dataset_connectors' => 'genome' } }
-                    ],
-                    prefetch => [
-                        'locations',
-                        { 'dataset' => { 'dataset_connectors' => 'genome' } }
-                    ]
-                }
-            )
+#            $ds->features(
+#                $search,
+#                {
+#                    join => [
+#                        "feature_type", 'locations',
+#                        { 'dataset' => { 'dataset_connectors' => 'genome' } }
+#                    ],
+#                    prefetch => [
+#                        'locations',
+#                        { 'dataset' => { 'dataset_connectors' => 'genome' } }
+#                    ]
+#                }
+#            )
+				get_features(%$search)
           )
         {
-            my $seq = substr(
-                $seqs{ $feat->chromosome },
-                $feat->start - 1,
-                $feat->stop - $feat->start + 1
-            );
-            $feat->genomic_sequence( seq => $seq );
+#            my $seq = substr(
+#                $seqs{ $feat->chromosome },
+#                $feat->start - 1,
+#                $feat->stop - $feat->start + 1
+#            );
+# why is this called? results not assigned to anything
+#            $feat->genomic_sequence( seq => $seq );
             $feat_count++;
             ( $code, $code_type ) = $feat->genetic_code() unless $code;
             my ($codon) = $feat->codon_frequency( counts => 1 );

@@ -55,7 +55,7 @@ $MAX_DS_LENGTH = 10000000;
     get_orgs                => \&get_orgs,
     get_org_info            => \&get_org_info,
     get_start_stop          => \&get_start_stop,
-    get_feature_counts      => \&get_feature_counts,
+#    get_feature_counts      => \&get_feature_counts,
     get_gc_for_chromosome   => \&get_gc_for_chromosome,
     get_gc_for_noncoding    => \&get_gc_for_noncoding,
     get_gc_for_feature_type => \&get_gc_for_feature_type,
@@ -913,142 +913,142 @@ sub get_chr_info {
     });
 }
 
-sub get_feature_counts {
-    my %opts  = @_;
-    my $dsid  = $opts{dsid};
-    my $dsgid = $opts{dsgid};
-    my $gstid = $opts{gstid};
-    my $chr   = $opts{chr};
-    my $query;
-    my $name;
-    if ($dsid) {
-        my $ds = $coge->resultset('Dataset')->find($dsid);
-        $name  = "dataset " . $ds->name;
-        $query = qq{
-SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
-  FROM feature
-  JOIN feature_type ft using (feature_type_id)
- WHERE dataset_id = $dsid
-};
-        $query .= qq{AND chromosome = '$chr'} if defined $chr;
-        $query .= qq{
-  GROUP BY ft.name
-};
-        $name .= " chromosome $chr" if defined $chr;
-    }
-    elsif ($dsgid) {
-        my $dsg = $coge->resultset('Genome')->find($dsgid);
-        $name = "dataset group ";
-        $name .= $dsg->name ? $dsg->name : $dsg->organism->name;
-        $query = qq{
-SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
-  FROM feature
-  JOIN feature_type ft using (feature_type_id)
-  JOIN dataset_connector dc using (dataset_id)
- WHERE genome_id = $dsgid
-  GROUP BY ft.name
-
-};
-    }
-
-    my $dbh = $coge->storage->dbh;  #DBI->connect( $connstr, $DBUSER, $DBPASS );
-    my $sth = $dbh->prepare($query);
-    $sth->execute;
-    my $feats = {};
-    while ( my $row = $sth->fetchrow_arrayref ) {
-        my $name = $row->[1];
-        $name =~ s/\s+/_/g;
-        $feats->{$name} = {
-            count => $row->[0],
-            id    => $row->[2],
-            name  => $row->[1],
-        };
-    }
-    my $gc_args;
-    $gc_args = "chr: '$chr'," if defined $chr;
-    $gc_args .= "dsid: $dsid,"
-      if $dsid
-    ; #set a var so that histograms are only calculated for the dataset and not hte genome
-    $gc_args .= "typeid: ";
-    my $feat_list_string = $dsid ? "dsid=$dsid" : "dsgid=$dsgid";
-    $feat_list_string .= ";chr=$chr" if defined $chr;
-    my $feat_string;    # .= qq{<div>Features for $name</div>};
-    $feat_string .= qq{<div class = " ui-corner-all ui-widget-content small">};
-    $feat_string .= qq{<table class=small>};
-
-    foreach my $type ( sort { $a cmp $b } keys %$feats ) {
-        $feat_string .= "<tr valign=top>";
-        $feat_string .=
-            "<td valign=top><div id=$type  >"
-          . $feats->{$type}{name}
-          . " (ftid"
-          . $feats->{$type}{id}
-          . ")</div>";
-        $feat_string .=
-          "<td valign=top align=right>" . commify( $feats->{$type}{count} );
-        $feat_string .= "<td><div id=" . $type . "_type class=\"link small\"
-  onclick=\"
-  \$('#gc_histogram').dialog('option','title', 'Histogram of GC content for "
-          . $feats->{$type}{name} . "s');
-  \$('#gc_histogram').dialog('open');"
-          . "get_feat_gc({$gc_args"
-          . $feats->{$type}{id} . "})\">"
-          . '%GC Hist</div>';
-        $feat_string .= "<td>|</td>";
-        $feat_string .=
-"<td class='small link' onclick=\"window.open('FeatList.pl?$feat_list_string"
-          . "&ftid="
-          . $feats->{$type}{id}
-          . ";gstid=$gstid')\">FeatList";
-        $feat_string .= "<td>|</td>";
-        $feat_string .=
-"<td class='small link' onclick=\"window.open('bin/get_seqs_for_feattype_for_genome.pl?ftid="
-          . $feats->{$type}{id} . ";";
-        $feat_string .= "dsgid=$dsgid;" if $dsgid;
-        $feat_string .= "dsid=$dsid;"   if $dsid;
-        $feat_string .= "')\">DNA Seqs";
-
-        if ( $feats->{$type}{name} eq "CDS" ) {
-            $feat_string .= "<td>|</td>";
-            $feat_string .=
-"<td class='small link' onclick=\"window.open('bin/get_seqs_for_feattype_for_genome.pl?p=1;ftid="
-              . $feats->{$type}{id};
-            $feat_string .= ";dsgid=$dsgid" if $dsgid;
-            $feat_string .= ";dsid=$dsid"   if $dsid;
-            $feat_string .= "')\">Prot Seqs";
-        }
-    }
-    $feat_string .= "</table>";
-
-    if ( $feats->{CDS} ) {
-        my $args;
-        $args .= "'args__dsid','ds_id',"   if $dsid;
-        $args .= "'args__dsgid','dsg_id'," if $dsgid;
-        $args .= "'args__chr','chr',"      if defined $chr;
-        $feat_string .=
-            "<div class=\"small link\" id=wobble_gc onclick=\"\$('#wobble_gc_histogram').html('loading...').show().dialog('open');"
-          . "get_wobble_gc([$args],['wobble_gc_histogram']);\">"
-          . "Histogram of wobble codon GC content"
-          . "</div>";
-        $feat_string .=
-            "<div class=\"small link\" id=wobble_gc_diff onclick=\"\$('#wobble_gc_diff_histogram').html('loading...').show().dialog('open');"
-          . "get_wobble_gc_diff([$args],['wobble_gc_diff_histogram']);\">"
-          . "Histogram of diff(CDS GC vs. wobble codon GC) content"
-          . "</div>";
-        $feat_string .= "<div class=\"small link \" id='codon_usage' onclick=\"
-        \$('#codon_usage_table').html('loading...').show().dialog('open');
-        get_codon_usage([$args],['codon_usage_table']);
-        \">" . "Codon usage table" . "</div>";
-        $feat_string .= "<div class=\"small link\" id=aa_usage onclick=\"
-        \$('#aa_usage_table').html('loading...').show().dialog('open');
-        get_aa_usage([$args],[open_aa_usage_table]);
-        \">" . "Amino acid usage table" . "</div>";
-
-    }
-    $feat_string .= "</div>";
-    $feat_string .= "None" unless keys %$feats;
-    return $feat_string;
-}
+#sub get_feature_counts {
+#    my %opts  = @_;
+#    my $dsid  = $opts{dsid};
+#    my $dsgid = $opts{dsgid};
+#    my $gstid = $opts{gstid};
+#    my $chr   = $opts{chr};
+#    my $query;
+#    my $name;
+#    if ($dsid) {
+#        my $ds = $coge->resultset('Dataset')->find($dsid);
+#        $name  = "dataset " . $ds->name;
+#        $query = qq{
+#SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
+#  FROM feature
+#  JOIN feature_type ft using (feature_type_id)
+# WHERE dataset_id = $dsid
+#};
+#        $query .= qq{AND chromosome = '$chr'} if defined $chr;
+#        $query .= qq{
+#  GROUP BY ft.name
+#};
+#        $name .= " chromosome $chr" if defined $chr;
+#    }
+#    elsif ($dsgid) {
+#        my $dsg = $coge->resultset('Genome')->find($dsgid);
+#        $name = "dataset group ";
+#        $name .= $dsg->name ? $dsg->name : $dsg->organism->name;
+#        $query = qq{
+#SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
+#  FROM feature
+#  JOIN feature_type ft using (feature_type_id)
+#  JOIN dataset_connector dc using (dataset_id)
+# WHERE genome_id = $dsgid
+#  GROUP BY ft.name
+#
+#};
+#    }
+#
+#    my $dbh = $coge->storage->dbh;  #DBI->connect( $connstr, $DBUSER, $DBPASS );
+#    my $sth = $dbh->prepare($query);
+#    $sth->execute;
+#    my $feats = {};
+#    while ( my $row = $sth->fetchrow_arrayref ) {
+#        my $name = $row->[1];
+#        $name =~ s/\s+/_/g;
+#        $feats->{$name} = {
+#            count => $row->[0],
+#            id    => $row->[2],
+#            name  => $row->[1],
+#        };
+#    }
+#    my $gc_args;
+#    $gc_args = "chr: '$chr'," if defined $chr;
+#    $gc_args .= "dsid: $dsid,"
+#      if $dsid
+#    ; #set a var so that histograms are only calculated for the dataset and not hte genome
+#    $gc_args .= "typeid: ";
+#    my $feat_list_string = $dsid ? "dsid=$dsid" : "dsgid=$dsgid";
+#    $feat_list_string .= ";chr=$chr" if defined $chr;
+#    my $feat_string;    # .= qq{<div>Features for $name</div>};
+#    $feat_string .= qq{<div class = " ui-corner-all ui-widget-content small">};
+#    $feat_string .= qq{<table class=small>};
+#
+#    foreach my $type ( sort { $a cmp $b } keys %$feats ) {
+#        $feat_string .= "<tr valign=top>";
+#        $feat_string .=
+#            "<td valign=top><div id=$type  >"
+#          . $feats->{$type}{name}
+#          . " (ftid"
+#          . $feats->{$type}{id}
+#          . ")</div>";
+#        $feat_string .=
+#          "<td valign=top align=right>" . commify( $feats->{$type}{count} );
+#        $feat_string .= "<td><div id=" . $type . "_type class=\"link small\"
+#  onclick=\"
+#  \$('#gc_histogram').dialog('option','title', 'Histogram of GC content for "
+#          . $feats->{$type}{name} . "s');
+#  \$('#gc_histogram').dialog('open');"
+#          . "get_feat_gc({$gc_args"
+#          . $feats->{$type}{id} . "})\">"
+#          . '%GC Hist</div>';
+#        $feat_string .= "<td>|</td>";
+#        $feat_string .=
+#"<td class='small link' onclick=\"window.open('FeatList.pl?$feat_list_string"
+#          . "&ftid="
+#          . $feats->{$type}{id}
+#          . ";gstid=$gstid')\">FeatList";
+#        $feat_string .= "<td>|</td>";
+#        $feat_string .=
+#"<td class='small link' onclick=\"window.open('bin/get_seqs_for_feattype_for_genome.pl?ftid="
+#          . $feats->{$type}{id} . ";";
+#        $feat_string .= "dsgid=$dsgid;" if $dsgid;
+#        $feat_string .= "dsid=$dsid;"   if $dsid;
+#        $feat_string .= "')\">DNA Seqs";
+#
+#        if ( $feats->{$type}{name} eq "CDS" ) {
+#            $feat_string .= "<td>|</td>";
+#            $feat_string .=
+#"<td class='small link' onclick=\"window.open('bin/get_seqs_for_feattype_for_genome.pl?p=1;ftid="
+#              . $feats->{$type}{id};
+#            $feat_string .= ";dsgid=$dsgid" if $dsgid;
+#            $feat_string .= ";dsid=$dsid"   if $dsid;
+#            $feat_string .= "')\">Prot Seqs";
+#        }
+#    }
+#    $feat_string .= "</table>";
+#
+#    if ( $feats->{CDS} ) {
+#        my $args;
+#        $args .= "'args__dsid','ds_id',"   if $dsid;
+#        $args .= "'args__dsgid','dsg_id'," if $dsgid;
+#        $args .= "'args__chr','chr',"      if defined $chr;
+#        $feat_string .=
+#            "<div class=\"small link\" id=wobble_gc onclick=\"\$('#wobble_gc_histogram').html('loading...').show().dialog('open');"
+#          . "get_wobble_gc([$args],['wobble_gc_histogram']);\">"
+#          . "Histogram of wobble codon GC content"
+#          . "</div>";
+#        $feat_string .=
+#            "<div class=\"small link\" id=wobble_gc_diff onclick=\"\$('#wobble_gc_diff_histogram').html('loading...').show().dialog('open');"
+#          . "get_wobble_gc_diff([$args],['wobble_gc_diff_histogram']);\">"
+#          . "Histogram of diff(CDS GC vs. wobble codon GC) content"
+#          . "</div>";
+#        $feat_string .= "<div class=\"small link \" id='codon_usage' onclick=\"
+#        \$('#codon_usage_table').html('loading...').show().dialog('open');
+#        get_codon_usage([$args],['codon_usage_table']);
+#        \">" . "Codon usage table" . "</div>";
+#        $feat_string .= "<div class=\"small link\" id=aa_usage onclick=\"
+#        \$('#aa_usage_table').html('loading...').show().dialog('open');
+#        get_aa_usage([$args],[open_aa_usage_table]);
+#        \">" . "Amino acid usage table" . "</div>";
+#
+#    }
+#    $feat_string .= "</div>";
+#    $feat_string .= "None" unless keys %$feats;
+#    return $feat_string;
+#}
 
 sub gen_data {
     my $message = shift;
@@ -1851,9 +1851,10 @@ sub get_total_length_for_ds {
     my %opts   = @_;
     my $dsid   = $opts{dsid};
     my $ds     = $coge->resultset('Dataset')->find($dsid);
-    my $length = 0;
-    map { $length += $ds->last_chromosome_position($_) } $ds->get_chromosomes();
-    return commify($length);
+#    my $length = 0;
+#    map { $length += $ds->last_chromosome_position($_) } $ds->get_chromosomes();
+#    return commify($length);
+	return commify($ds->total_length);
 }
 
 1;

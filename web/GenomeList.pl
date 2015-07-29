@@ -39,7 +39,7 @@ $LIST_TYPE = $coge->resultset('ListType')->find_or_create( { name => 'genome' } 
 
 %FUNCTION = (
     gen_html                 => \&gen_html,
-    get_feature_counts       => \&get_feature_counts,
+#    get_feature_counts       => \&get_feature_counts,
     get_gc                   => \&get_gc,
     get_aa_usage             => \&get_aa_usage,
     get_codon_usage          => \&get_codon_usage,
@@ -660,50 +660,50 @@ qq{<span class=link onclick=window.open('OrganismView.pl?org_desc=$_')>$_</span>
     return \@table, $count;
   }
 
-sub get_feature_counts {
-    my %opts  = @_;
-    my $dsgid = $opts{dsgid};
-    return "No specified dataset group id" unless $dsgid;
-    my $dsg   = $coge->resultset('Genome')->find($dsgid);
-    my $query = qq{
-SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
-  FROM feature
-  JOIN feature_type ft using (feature_type_id)
-  JOIN dataset_connector dc using (dataset_id)
- WHERE genome_id = $dsgid
-  GROUP BY ft.name
-
-};
-    my $dbh = $coge->storage->dbh;  #DBI->connect( $connstr, $DBUSER, $DBPASS );
-    my $sth = $dbh->prepare($query);
-    $sth->execute;
-    my $feats = {};
-
-    while ( my $row = $sth->fetchrow_arrayref ) {
-        my $name = $row->[1];
-        $name =~ s/\s+/&nbsp/g;
-        $feats->{$name} = {
-            count => $row->[0],
-            id    => $row->[2],
-            name  => $name,
-        };
-    }
-    my $feat_string .= qq{<table class="small ui-widget-content ui-corner-all">
-<thead></thead><tbody>};
-    $feat_string .= "<tr valign=top>" . join(
-        "\n<tr valign=top>",
-        map {
-                "<td valign=top><div id=$_>"
-              . $feats->{$_}{name}
-              . "</div>"
-              . "<td valign=top align=right>"
-              . $feats->{$_}{count}
-          } sort { $a cmp $b } keys %$feats
-    );
-    $feat_string .= "</tbody></table>";
-    $feat_string .= "None" unless keys %$feats;
-    return $feat_string;
-}
+#sub get_feature_counts {
+#    my %opts  = @_;
+#    my $dsgid = $opts{dsgid};
+#    return "No specified dataset group id" unless $dsgid;
+#    my $dsg   = $coge->resultset('Genome')->find($dsgid);
+#    my $query = qq{
+#SELECT count(distinct(feature_id)), ft.name, ft.feature_type_id
+#  FROM feature
+#  JOIN feature_type ft using (feature_type_id)
+#  JOIN dataset_connector dc using (dataset_id)
+# WHERE genome_id = $dsgid
+#  GROUP BY ft.name
+#
+#};
+#    my $dbh = $coge->storage->dbh;  #DBI->connect( $connstr, $DBUSER, $DBPASS );
+#    my $sth = $dbh->prepare($query);
+#    $sth->execute;
+#    my $feats = {};
+#
+#    while ( my $row = $sth->fetchrow_arrayref ) {
+#        my $name = $row->[1];
+#        $name =~ s/\s+/&nbsp/g;
+#        $feats->{$name} = {
+#            count => $row->[0],
+#            id    => $row->[2],
+#            name  => $name,
+#        };
+#    }
+#    my $feat_string .= qq{<table class="small ui-widget-content ui-corner-all">
+#<thead></thead><tbody>};
+#    $feat_string .= "<tr valign=top>" . join(
+#        "\n<tr valign=top>",
+#        map {
+#                "<td valign=top><div id=$_>"
+#              . $feats->{$_}{name}
+#              . "</div>"
+#              . "<td valign=top align=right>"
+#              . $feats->{$_}{count}
+#          } sort { $a cmp $b } keys %$feats
+#    );
+#    $feat_string .= "</tbody></table>";
+#    $feat_string .= "None" unless keys %$feats;
+#    return $feat_string;
+#}
 
 sub gen_data {
     my $message = shift;

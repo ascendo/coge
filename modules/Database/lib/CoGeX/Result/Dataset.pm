@@ -5,6 +5,7 @@ use warnings;
 use Data::Dumper;
 use POSIX;
 use Carp qw (cluck);
+use CoGe::Core::Features qw( get_total_chromosomes_length );
 use CoGe::Core::Storage qw( reverse_complement );
 
 use base 'DBIx::Class::Core';
@@ -432,25 +433,26 @@ See Also   :
 
 sub total_length {
     my $self = shift;
-    my %opts = @_;
-    my $ftid = $opts{ftid};
-    my $search;
-    my $join = {
-        select => [ { sum => 'stop' } ],
-        as     => ['total_length']
-        ,    # remember this 'as' is for DBIx::Class::ResultSet not SQL
-    };
-    if ($ftid) {
-        $search = { 'feature_type_id' => $ftid };
-    }
-    else {
-        $search = { 'name' => 'chromosome' };
-        $join->{join} = 'feature_type';
-    }
-
-    my $rs = $self->features( $search, $join );
-    my $total_length = $rs->first->get_column('total_length');
-    return ( defined $total_length ? $total_length : 0);
+    return get_total_chromosomes_length($self->id);
+#    my %opts = @_;
+#    my $ftid = $opts{ftid};
+#    my $search;
+#    my $join = {
+#        select => [ { sum => 'stop' } ],
+#        as     => ['total_length']
+#        ,    # remember this 'as' is for DBIx::Class::ResultSet not SQL
+#    };
+#    if ($ftid) {
+#        $search = { 'feature_type_id' => $ftid };
+#    }
+#    else {
+#        $search = { 'name' => 'chromosome' };
+#        $join->{join} = 'feature_type';
+#    }
+#
+#    my $rs = $self->features( $search, $join );
+#    my $total_length = $rs->first->get_column('total_length');
+#    return ( defined $total_length ? $total_length : 0);
 }
 
 ############################################### subroutine header begin ##
