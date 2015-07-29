@@ -5,7 +5,8 @@ use warnings;
 use Data::Dumper;
 use POSIX;
 use Carp qw (cluck);
-use CoGe::Core::Features qw( get_features get_total_chromosomes_length );
+use CoGe::Core::Feature;
+use CoGe::Core::Features qw( get_chromosome_count get_features get_total_chromosomes_length );
 use CoGe::Core::Storage qw( reverse_complement );
 
 use base 'DBIx::Class::Core';
@@ -474,20 +475,21 @@ See Also   :
 
 sub chromosome_count {
     my $self = shift;
-    my %opts = @_;
-    my $ftid = $opts{ftid};
-    my $search;
-    my $join;
-    if ($ftid) {
-        $search = { 'feature_type_id' => $ftid };
-    }
-    else {
-        $search = { 'name' => 'chromosome' };
-        $join->{join} = 'feature_type';
-    }
-
-    my $count = $self->features( $search, $join )->count;
-    return $count;
+    return get_chromosome_count($self->id);
+#    my %opts = @_;
+#    my $ftid = $opts{ftid};
+#    my $search;
+#    my $join;
+#    if ($ftid) {
+#        $search = { 'feature_type_id' => $ftid };
+#    }
+#    else {
+#        $search = { 'name' => 'chromosome' };
+#        $join->{join} = 'feature_type';
+#    }
+#
+#    my $count = $self->features( $search, $join )->count;
+#    return $count;
 }
 
 sub has_gene_annotation {
@@ -542,7 +544,7 @@ See Also   :
 sub get_chromosomes {
     my $self   = shift;
     my %opts   = @_;
-    my $ftid   = $opts{ftid};   #feature_type_id for feature_type of name "chromosome";
+#    my $ftid   = $opts{ftid};   #feature_type_id for feature_type of name "chromosome";
     my $length = $opts{length}; #option to return length of chromosomes as well
     my $limit  = $opts{limit};  #optional number of chromosomes to return, sorted by size
     my $max    = $opts{max};    #optional number of chromosomes to avoid slow query, sorted by size
@@ -553,15 +555,16 @@ sub get_chromosomes {
     #assembled chromosome, or a contig, supercontig, bac, etc.
     my $search = {};
     my $search_type = { order_by => { -desc => 'stop' } };
-    if ($ftid) {
-        $search->{feature_type_id} = $ftid;
-    }
-    else {
-        $search->{name}      = "chromosome";
-        $search_type->{join} = "feature_type";
-    }
+#    if ($ftid) {
+#        $search->{feature_type_id} = $ftid;
+#    }
+#    else {
+#        $search->{name}      = "chromosome";
+#        $search_type->{join} = "feature_type";
+#    }
     
-    if ($max && $self->features( $search, $search_type )->count() > $max ) {
+#    if ($max && $self->features( $search, $search_type )->count() > $max ) {
+    if ($max && get_chromosome_count($self->id) > $max ) {
         return;
     }
 
@@ -570,7 +573,8 @@ sub get_chromosomes {
     }
     
     if ($length) {
-        @data = $self->features( $search, $search_type );
+#        @data = $self->features( $search, $search_type );
+        @data = CoGe::Core::Features::get_chromosomes($self->id);
     }
     else {
         @data = map { $_->chromosome } $self->features( $search, $search_type );
@@ -1591,7 +1595,9 @@ sub user_groups() {
 
 sub features {
 	my $self = shift;
-	return get_features(dataset => $self->id);
+	my $search = shift;
+	$search->{dataset} = $self->id;
+	return get_features($search);
 }
 
 1;

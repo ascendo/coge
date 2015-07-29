@@ -5,6 +5,7 @@ BEGIN {
 	@EXPORT_OK = qw( build_filter build_terms_filter elasticsearch_get elasticsearch_post );
 }
 
+use Data::Dumper;
 use LWP::UserAgent;
 
 ################################################ subroutine header begin ##
@@ -25,20 +26,20 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub build_filter {
-	my %opts = @_;
-	my $size = keys %opts;
+	my $search = shift;
+	my $size = keys %$search;
 	my $json;
 	if ($size > 1) {
 		$json = '{"and":[';
 	}
 	my $first = 1;
-	for my $key (keys %opts) {
+	for my $key (keys %$search) {
 		if ($first) {
 			$first = 0;
 		} else {
 			$json .= ',';
 		}
-		$json .= '{"term":{"' . $key . '":"' . $opts{$key} . '"}}'; # note: doesn't yet encode string values
+		$json .= build_terms_filter($key, $search->{$key});
 	}
 	if ($size > 1) {
 		$json .= ']}';
@@ -66,7 +67,6 @@ See Also   :
 sub build_terms_filter {
 	my $field = shift;
 	my $size = @_;
-
 	if ($size == 1) {
 		return '{"term":{"' . $field . '":' . shift . '}}';
 	}

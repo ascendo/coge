@@ -10,7 +10,7 @@ use CoGe::Accessory::IRODS qw(irods_iput irods_imeta);
 use CoGe::Builder::CommonTasks;
 use CoGe::Core::Chromosomes;
 use CoGe::Core::Experiment qw(experimentcmp);
-use CoGe::Core::Features qw(get_features get_type_counts);
+use CoGe::Core::Features qw(get_type_counts);
 use CoGe::Core::Genome;
 use CoGe::Core::Storage;
 
@@ -426,7 +426,7 @@ sub get_codon_usage {
 #    $search->{"me.chromosome"} = $chr if defined $chr;
 
     foreach my $ds (@datasets) {
-	    my $search = { dataset => $ds->id, type => 3 }; # 3 is feature_type_id for CDS
+	    my $search = { type => 3 }; # 3 is feature_type_id for CDS
     	$search->{"chromosome"} = $chr if defined $chr;
         foreach my $feat (
 #            $ds->features(
@@ -442,7 +442,7 @@ sub get_codon_usage {
 #                    ]
 #                }
 #            )
-				get_features(%$search)
+				$ds->features($search)
           )
         {
 #            my $seq = substr(
@@ -1494,7 +1494,7 @@ sub get_aa_usage {
     my ( $code, $code_type );
 
     foreach my $ds (@datasets) {
-	    my $search = { dataset => $ds->id, type => 3 }; # 3 is feature_type_id for CDS
+	    my $search = { type => 3 }; # 3 is feature_type_id for CDS
     	$search->{"chromosome"} = $chr if $chr;
         foreach my $feat (
 #            $ds->features(
@@ -1510,7 +1510,7 @@ sub get_aa_usage {
 #                    ]
 #                }
 #            )
-				get_features(%$search)
+				$ds->features($search)
           )
         {
 #            my $seq = substr(

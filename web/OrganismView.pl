@@ -732,11 +732,11 @@ sub get_dataset_info {
     # Get chromosome list - FIXME why is this here and not in separate routine? mdb, 9/26/14
     #
     my $html_chr;
-    my $total_length = $ds->total_length( ftid => 4 ); # FIXME hardcoded ftid value
-    my $chr_num = $ds->chromosome_count( ftid => 4 );
+    my $total_length = $ds->total_length;
+    my $chr_num = $ds->chromosome_count;
     my %chr;
     my $tmp_count = 0;
-    foreach my $c ( $ds->get_chromosomes( ftid => 4, length => 1, limit => $MAX_NUM_CHROMOSOME_RESULTS, max => 1000 ) ) {
+    foreach my $c ( $ds->get_chromosomes( length => 1, limit => $MAX_NUM_CHROMOSOME_RESULTS, max => 1000 ) ) {
         if (ref($c) =~ /CoGeX/ ) { $chr{$c->chromosome} = { length => $c->stop }; }
         else { $chr{ $c } = { length => 0 }; }
     }

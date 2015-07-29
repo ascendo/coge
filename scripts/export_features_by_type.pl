@@ -85,10 +85,12 @@ exit if -r $file;
 my $count = 1;
 my @feats;
 if ($ds) {
-    @feats = $ds->features( { feature_type_id => $ftid } );
+#    @feats = $ds->features( { feature_type_id => $ftid } );
+    @feats = $ds->features( { type => $ftid } );
 }
 else {
-    @feats = $dsg->features( { feature_type_id => $ftid } );
+#    @feats = $dsg->features( { feature_type_id => $ftid } );
+    @feats = $dsg->features( { type => $ftid } );
 }
 
 my $org = $dsg->organism->name;

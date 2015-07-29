@@ -41,7 +41,7 @@ sub fetch {
             description => $dataset->source->description,
             link => $dataset->source->link,
         },
-        chromosomes => $dataset->chromosome_count(ftid => 4),
+        chromosomes => $dataset->chromosome_count,
         restricted => $dataset->restricted ? Mojo::JSON->true : Mojo::JSON->false,
     });
 }
