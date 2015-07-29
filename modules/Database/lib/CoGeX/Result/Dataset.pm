@@ -5,7 +5,7 @@ use warnings;
 use Data::Dumper;
 use POSIX;
 use Carp qw (cluck);
-use CoGe::Core::Features qw( get_total_chromosomes_length );
+use CoGe::Core::Features qw( get_features get_total_chromosomes_length );
 use CoGe::Core::Storage qw( reverse_complement );
 
 use base 'DBIx::Class::Core';
@@ -95,7 +95,7 @@ __PACKAGE__->add_columns(
 );
 
 __PACKAGE__->set_primary_key("dataset_id");
-__PACKAGE__->has_many( "features" => "CoGeX::Result::Feature", 'dataset_id' );
+#__PACKAGE__->has_many( "features" => "CoGeX::Result::Feature", 'dataset_id' );
 __PACKAGE__->has_many(
     "dataset_connectors" => "CoGeX::Result::DatasetConnector",
     'dataset_id'
@@ -1587,6 +1587,11 @@ sub user_groups() {
     }
 
     return @groups;
+}
+
+sub features {
+	my $self = shift;
+	return get_features(dataset => $self->id);
 }
 
 1;

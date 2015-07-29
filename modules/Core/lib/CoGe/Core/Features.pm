@@ -2,7 +2,7 @@ package CoGe::Core::Features;
 
 BEGIN {
 	use Exporter 'import';
-	our @EXPORT_OK = qw(get_features get_total_chromosomes_length get_type_count get_type_counts);
+	our @EXPORT_OK = qw( get_feature get_features get_total_chromosomes_length get_type_count get_type_counts );
 }
 
 =head1 NAME
@@ -41,7 +41,7 @@ use Encode qw(encode);
 use JSON::XS;
 
 use base 'Class::Accessor';
-__PACKAGE__->mk_accessors( 'chromosome', '_genomic_sequence', 'id', 'names', 'start', 'stop', 'strand', 'trans_type' ); #_genomic_sequence =>place to store the feature's genomic sequence with no up and down stream stuff
+__PACKAGE__->mk_accessors( 'chromosome', '_genomic_sequence', 'id', 'start', 'stop', 'strand', 'trans_type' ); #_genomic_sequence =>place to store the feature's genomic sequence with no up and down stream stuff
 
 ################################################ subroutine header begin ##
 
@@ -481,6 +481,30 @@ sub genomic_sequence {
 
 ################################################ subroutine header begin ##
 
+=head2 get_feature
+
+ Usage     : 
+ Purpose   :
+ Returns   : a single feature
+ Argument  : id of the feature you want
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_feature {
+	my $json = elasticsearch_get('coge/features/' . shift);
+	my $o = decode_json($json);
+	my $feature = $o->{_source};
+	return bless $feature;
+}
+
+################################################ subroutine header begin ##
+
 =head2 get_features
 
  Usage     : 
@@ -591,6 +615,78 @@ sub get_type_counts {
 
 ################################################ subroutine header begin ##
 
+=head2 length
+
+ Usage     :
+ Purpose   :
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub length {
+	my $self = shift;
+	my $length;
+	
+	map { $length += ( $_->{stop} - $_->{start} + 1 ) } $self->clean_locations;
+	
+    unless (defined $length) { # mdb added 4/20/15 COGE-610 for cases where there are no locations
+        $length = $self->stop - $self->start + 1;
+	}
+	
+	if ($length < 0) {
+        print STDERR "Feature::length ERROR, invalid length $length for feature id ", $self->id, "\n";
+    }
+	
+	return $length;
+}
+
+################################################ subroutine header begin ##
+
+=head2 names
+
+ Usage     :
+ Purpose   :
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub names {
+	my $self = shift;
+	if ( $self->{_names} ) {
+		return wantarray ? @{ $self->{_names} } : $self->{_names};
+	}
+
+	my @names;
+	foreach my $name ( sort { $a->{name} cmp $b->{name} } @{$self->{names}} ) {
+		if ( $name->{primary} ) {
+			unshift @names, $name->{name};
+		}
+		else {
+			push @names, $name->{name};
+		}
+	}
+	$self->{_names} = \@names;
+	return wantarray ? @names : \@names;
+}
+
+################################################ subroutine header begin ##
+
 =head2 organism
 
  Usage     : 
@@ -672,6 +768,29 @@ sub type {
 
 	$self->{_type} = CoGeX->dbconnect(get_defaults())->resultset('FeatureType')->find($self->{type});
 	return $self->{_type};
+}
+
+################################################ subroutine header begin ##
+
+=head2 version
+
+ Usage     : my $version = $feat->version
+ Purpose   : return the dataset version of the feature
+ Returns   : an integer
+ Argument  : none
+ Throws    : none
+ Comments  : returns $self->dataset->version
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub version {
+	my $self = shift;
+	return $self->dataset->version();
 }
 
 1;

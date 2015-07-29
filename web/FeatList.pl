@@ -10,6 +10,7 @@ use CoGeX;
 use CoGeX::Result::Feature;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::Utils qw( commify );
+use CoGe::Core::Features qw( get_feature );
 
 use vars qw($P $PAGE_TITLE $PAGE_NAME
   $TEMPDIR $TEMPURL $USER $DATE $BASEFILE $coge $cogeweb $FORM %FUNCTION);
@@ -304,29 +305,30 @@ sub generate_table {
             $fid = $item;
             $gstidt = $gstid if $gstid;
         }
-        my ($feat) = $coge->resultset("Feature")->find(
-            { 'me.feature_id' => $fid },
-            {
-                join => [
-                    'feature_names',
-                    'locations',
-                    'feature_type',
-                    {
-                        'dataset' =>
-                          { 'dataset_connectors' => { genome => 'organism' } }
-                    }
-                ],
-                prefetch => [
-                    'feature_names',
-                    'locations',
-                    'feature_type',
-                    {
-                        'dataset' =>
-                          { 'dataset_connectors' => { genome => 'organism' } }
-                    }
-                ],
-            }
-        );
+#        my ($feat) = $coge->resultset("Feature")->find(
+#            { 'me.feature_id' => $fid },
+#            {
+#                join => [
+#                    'feature_names',
+#                    'locations',
+#                    'feature_type',
+#                    {
+#                        'dataset' =>
+#                          { 'dataset_connectors' => { genome => 'organism' } }
+#                    }
+#                ],
+#                prefetch => [
+#                    'feature_names',
+#                    'locations',
+#                    'feature_type',
+#                    {
+#                        'dataset' =>
+#                          { 'dataset_connectors' => { genome => 'organism' } }
+#                    }
+#                ],
+#            }
+#        );
+		my ($feat) = get_feature($fid);
         next unless $feat;
         $feats{$item} = {
             fid   => $fid,
@@ -379,7 +381,7 @@ qq{<div class='link' id='codon_usage$cds_count'><DIV onclick="\$('#codon_usage$c
             FEATID => $item,
             NAME   => $name,
             TYPE   => $feat->type->name,
-            CHR    => $feat->chr,
+            CHR    => $feat->chromosome,
             STRAND => $feat->strand,
             START  => commify( $feat->start ),
             STOP   => commify( $feat->stop ),
