@@ -554,7 +554,8 @@ sub get_chromosomes {
     #features of this type refer to the entire stored sequence which may be a fully
     #assembled chromosome, or a contig, supercontig, bac, etc.
     my $search = {};
-    my $search_type = { order_by => { -desc => 'stop' } };
+#    my $search_type = { order_by => { -desc => 'stop' } };
+    my $search_type = { sort => { 'stop' => 'desc' } };
 #    if ($ftid) {
 #        $search->{feature_type_id} = $ftid;
 #    }
@@ -563,21 +564,22 @@ sub get_chromosomes {
 #        $search_type->{join} = "feature_type";
 #    }
     
-#    if ($max && $self->features( $search, $search_type )->count() > $max ) {
-    if ($max && get_chromosome_count($self->id) > $max ) {
+#    if ($max && $self->features( $search, $search_type)->count() > $max ) {
+    if ($max && get_chromosome_count($self->id) > $max) {
         return;
     }
 
     if ($limit) {
-        $search_type->{rows} = $limit;
+#        $search_type->{rows} = $limit;
+        $search_type->{size} = $limit;
     }
     
     if ($length) {
 #        @data = $self->features( $search, $search_type );
-        @data = CoGe::Core::Features::get_chromosomes($self->id);
+        @data = CoGe::Core::Features::get_chromosomes($self->id, $search_type);
     }
     else {
-        @data = map { $_->chromosome } $self->features( $search, $search_type );
+        @data = map { $_->chromosome } $self->features($search, $search_type);
     }
     unless (@data) {
         my %seen;

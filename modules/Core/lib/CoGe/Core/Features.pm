@@ -214,7 +214,7 @@ sub get_chromosome_count {
  Usage     :
  Purpose   :
  Returns   : array of the chromosome features for the dataset
- Argument  : id of the dataset
+ Argument  : id of the dataset, options - optional hash passed on to get_features
  Throws    :
  Comments  :
 
@@ -226,7 +226,7 @@ See Also   :
 
 sub get_chromosomes {
 	my $search = { dataset => shift, type => 4 }; # 4 is the feature_type_id for chromosomes
-	return get_features($search);
+	return get_features($search, shift);
 }
 
 ################################################ subroutine header begin ##
@@ -261,11 +261,13 @@ sub get_feature {
  Usage     : 
  Purpose   : get all features for a dataset
  Returns   : array of feature hashes
- Argument  : dataset - required, id of the dataset
- 			 chromosome - optional, to only return features from one chromosome
- 			 type - optional, feature_type_id, to only return features of the specified type
+ Argument  : search - hash of fields to query, options (optional) - hash of query options
  Throws    :
- Comments  :
+ Comments  : for search: dataset - required: id of the dataset
+ 			 chromosome - optional: to only return features from one chromosome
+ 			 type - optional: feature_type_id, to only return features of the specified type
+ 			 for options: size: max number of hits to return
+ 			 sort: one of or an array ref of field names and/or hashes of field name => 'asc'|'desc'
 
 See Also   :
 
@@ -275,7 +277,22 @@ See Also   :
 
 sub get_features {
 	my $search = shift;
-	my $json = elasticsearch_post('coge/features/_search?search_type=scan&scroll=1m', '{"query":{"filtered":{"filter":' . build_filter($search) . '}},"size":1000000}');
+	my $options = shift;
+	my $data '{';
+	my $size = 10000000;
+
+	if ($options) {
+		$size = $options->{size} if $options->{size};
+		if ($options->{sort}) {
+			my $sort = encode_json($options->{sort});
+			if (substr($sort, 0, 1) ne '[') {
+				$sort = '[' . $sort . ']';
+			}
+			$data .= '"sort":' . $sort . ',';
+		}
+	}
+	$data .= '"query":{"filtered":{"filter":' . build_filter($search) . '}},"size":' . $size . '}';
+	my $json = elasticsearch_post('coge/features/_search?search_type=scan&scroll=1m', $data);
 	my $o = decode_json($json);
 	$json = elasticsearch_post('_search/scroll?scroll=1m', $o->{_scroll_id});
 	$o = decode_json($json);

@@ -552,22 +552,17 @@ sub get_genome_info {
     my $gst_name = $dsg->genomic_sequence_type->name;
     $gst_name .= ": " . $dsg->type->description if $dsg->type->description;
 
-print STDERR "o: " . $dsg->owner . "\n";
-    my $owner = $dsg->owner;
-    my $owner_field;
-
-    if ($owner) {
-        my $username = $owner->display_name;
-        $owner_field = qq{<tr><td>Owner:</td><td>$username</td></tr>};
-    }
-
     $html .=
         qq{<tr><td>Genome ID: </td><td>$gid</td>}
       . qq{<tr><td>Sequence type: </td>}
       . qq{<td>$gst_name (gstid$gstid) </td>}
-      . qq{</tr>}
-      . $owner_field
-      . qq{<tr><td>Length: </td>}
+      . qq{</tr>};
+    my $owner = $dsg->owner;
+    if ($owner) {
+        my $username = $owner->display_name;
+        $html .= qq{<tr><td>Owner:</td><td>$username</td></tr>};
+    }
+    $html .= qq{<tr><td>Length: </td>}
       . qq{<td class='l'> }. commify($total_length) . qq{ bp</td>}
       . qq{</tr>}
       . qq{</div>};
@@ -737,7 +732,9 @@ sub get_dataset_info {
     my %chr;
     my $tmp_count = 0;
     foreach my $c ( $ds->get_chromosomes( length => 1, limit => $MAX_NUM_CHROMOSOME_RESULTS, max => 1000 ) ) {
-        if (ref($c) =~ /CoGeX/ ) { $chr{$c->chromosome} = { length => $c->stop }; }
+#        if (ref($c) =~ /CoGeX/ )
+        if (ref($c) =~ /CoGe::Core::Feature/ )
+         { $chr{$c->chromosome} = { length => $c->stop }; }
         else { $chr{ $c } = { length => 0 }; }
     }
     # Build chromosome options list
