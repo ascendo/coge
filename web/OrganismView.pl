@@ -552,7 +552,7 @@ sub get_genome_info {
     my $gst_name = $dsg->genomic_sequence_type->name;
     $gst_name .= ": " . $dsg->type->description if $dsg->type->description;
 
-
+print STDERR "o: " . $dsg->owner . "\n";
     my $owner = $dsg->owner;
     my $owner_field;
 

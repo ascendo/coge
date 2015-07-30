@@ -214,7 +214,7 @@ sub get_chromosome_count {
  Usage     :
  Purpose   :
  Returns   : array of the chromosome features for the dataset
- Argument  : search hash - optional
+ Argument  : id of the dataset
  Throws    :
  Comments  :
 
@@ -225,8 +225,7 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_chromosomes {
-	my $search = shift || {};
-	$search->{type} = 4; # 4 is the feature_type_id for chromosomes
+	my $search = { dataset => shift, type => 4 }; # 4 is the feature_type_id for chromosomes
 	return get_features($search);
 }
 
