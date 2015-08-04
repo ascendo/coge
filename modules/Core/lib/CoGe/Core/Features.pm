@@ -278,7 +278,7 @@ See Also   :
 sub get_features {
 	my $search = shift;
 	my $options = shift;
-	my $data '{';
+	my $data = '{';
 	my $size = 10000000;
 
 	if ($options) {
