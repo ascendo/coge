@@ -7,6 +7,11 @@ sub startup {
     my $self = shift;
 
     my $r = $self->routes->namespaces(["CoGe::Services::Data"]);
+    
+    # Global Search routes
+    $r->get("/global/search/#term")
+        ->name("global-search")
+        ->to("search#search", term => undef);
 
     # Organism routes
     $r->get("/organisms/search/#term")

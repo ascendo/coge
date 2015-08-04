@@ -22,10 +22,15 @@ var system_graph;
 var system_graph2;
 
 $(function () {
+	// Initialize CoGe web services
+    coge.services.init({
+    	baseUrl: API_BASE_URL,
+    	userName: USER_NAME
+    });
+	
 	$( "#tabs" ).tabs({
 		select: function(event, ui) {
-            var theSelectedTab = ui.index;
-            change_tab(theSelectedTab);
+            current_tab = ui.index;
             schedule_update(5000);
         },
 		show: function(event, ui) {
@@ -42,7 +47,12 @@ $(function () {
 				init_taxon_tree("taxonomic_tree");
 			}
 			if (current_tab == 6) {
-				init_system_load();
+				if (!system_graph) {
+					init_system_load();
+				}
+			}
+			if (current_tab == 7) {
+				$("#tabs-8").html('<iframe src="https://genomevolution.org/greentea/" height="100%" width="100%"></iframe>');
 			}
 		}
     });
@@ -333,123 +343,115 @@ function init_reports() {
 	});
 }
 
-function change_tab(tab) {
-	current_tab = tab;
-	//console.log(tab);
-}
-
 //Tab 1 Search
 function search_stuff (search_term) {
 	if(search_term.length > 2) {
 		$("#loading").show();
-		timestamps['search_stuff'] = new Date().getTime();
-		$.ajax({
-			//type: "POST",
-			//dataType: "json",
-			//contentType: "application/json; charset=utf8",
-			data: {
-				fname: 'search_stuff',
-				search_term: search_term,
-				timestamp: timestamps['search_stuff']
-			},
-			success : function(data) {
-				//console.log(data);
-				//$('#loading').hide();
-				var obj = jQuery.parseJSON(data);
+		
+		coge.services.search_global(search_term)
+			.done(function(response) {
+				console.log(response);
+				var obj = response;
 				
-				if (obj && obj.items && obj.timestamp != timestamps['search_stuff']) {
+				if (!obj || !obj.results) {
 					return;
 				}
+				
+				console.log
 
 				var userCounter = 0, orgCounter = 0, genCounter = 0, expCounter = 0, noteCounter = 0, usrgroupCounter = 0;
 				var userList = "", orgList = "", genList = "", expList = "", noteList = "", usrgroupList = "";
 
-				for (var i = 0; i < obj.items.length; i++) {
-					if (obj.items[i].type == "user") {
+				for (var i = 0; i < obj.results.length; i++) {
+					if (obj.results[i].type == "user") {
 						userList = userList + "<tr><td><span>";
-						userList = userList + (obj.items[i].label) + " (ID: " + (obj.items[i].id) + ") ";
-						userList = userList + "<button onclick=\"search_user(" + (obj.items[i].id) + ",'user')\">Show Data</button>";
+						userList = userList + obj.results[i].first + " " + obj.results[i].last + ", ";
+						if (user_is_admin) {
+							userList = userList + obj.results[i].email;
+						}
+						userList = userList + " (" + obj.results[i].username + ", id" + obj.results[i].id + ") ";
+						userList = userList + "<button onclick=\"search_user(" + obj.results[i].id + ",'user')\">Show Data</button>";
 						userList = userList + "</span></td></tr>";
 						userCounter++;
 					}
 
-					if (obj.items[i].type == "organism") {
-						orgList = orgList + "<tr><td><span title='" + obj.items[i].description + "'>";
-						orgList = orgList + (obj.items[i].label) + " (ID: " + (obj.items[i].id) + ")";
-						orgList = orgList + " <a href=\"OrganismView.pl?oid=" + (obj.items[i].id) + "\">Info </a>";
+					if (obj.results[i].type == "organism") {
+						orgList = orgList + "<tr><td><span title='" + obj.results[i].description + "'>";
+						orgList = orgList + obj.results[i].name + " (id" + obj.results[i].id + ")";
+						orgList = orgList + " <a href=\"OrganismView.pl?oid=" + obj.results[i].id + "\">Info </a>";
 						orgList = orgList + "</span></td></tr>";
 						orgCounter++;
 					}
 	
-					if (obj.items[i].type == "genome") {
-						genList = genList + "<tr><td><span onclick=\"modify_item(" + obj.items[i].id + ", 'Genome', 'restrict');\"";
-						if (obj.items[i].restricted == 1) {
+					if (obj.results[i].type == "genome") {
+						genList = genList + "<tr><td><span onclick=\"modify_item(" + obj.results[i].id + ", 'Genome', 'restrict');\"";
+						if (obj.results[i].restricted == 1) {
 							genList = genList + " class=\"link ui-icon ui-icon-locked\"></span>";
 						} else {
 							genList = genList + " class=\"link ui-icon ui-icon-unlocked\"></span>";
 						}
-						genList = genList + "<span onclick=\"modify_item(" + obj.items[i].id + ", 'Genome', 'delete');\"";
+						genList = genList + "<span onclick=\"modify_item(" + obj.results[i].id + ", 'Genome', 'delete');\"";
 						genList = genList + " class=\"link ui-icon ui-icon-trash\"></span>";
-						if (obj.items[i].deleted == 1) {
+						if (obj.results[i].deleted == 1) {
 							genList = genList + "<span style=\"color: red\">";
 						} else {
 							genList = genList + "<span>";
 						}
-						genList = genList + (obj.items[i].label) + " <a href=\"GenomeInfo.pl?gid=" + (obj.items[i].id) + "\">Info </a>";
-						genList = genList + "<button class='access' onclick='share_dialog(" + obj.items[i].id + ", 2, " + obj.items[i].restricted + ")'>Edit Access</button>";
+						genList = genList + obj.results[i].name + " <a href=\"GenomeInfo.pl?gid=" + obj.results[i].id + "\">Info </a>";
+						genList = genList + "<button class='access' onclick='share_dialog(" + obj.results[i].id + ", 2, " + obj.results[i].restricted + ")'>Edit Access</button>";
 						genList = genList + "</span></td></tr>";
 						genCounter++;
 					}
 	
-					if (obj.items[i].type == "experiment") {
-						expList = expList + "<tr><td><span onclick=\"modify_item(" + obj.items[i].id + ", 'Experiment', 'restrict');\"";
-						if (obj.items[i].restricted == 1) {
+					if (obj.results[i].type == "experiment") {
+						expList = expList + "<tr><td><span onclick=\"modify_item(" + obj.results[i].id + ", 'Experiment', 'restrict');\"";
+						if (obj.results[i].restricted == 1) {
 							expList = expList + " class=\"link ui-icon ui-icon-locked\"></span>";
 						} else {
 							expList = expList + " class=\"link ui-icon ui-icon-unlocked\"></span>";
 						}
-						expList = expList + "<span onclick=\"modify_item(" + obj.items[i].id + ", 'Experiment', 'delete');\"";
+						expList = expList + "<span onclick=\"modify_item(" + obj.results[i].id + ", 'Experiment', 'delete');\"";
 						expList = expList + " class=\"link ui-icon ui-icon-trash\"></span>";
-						if (obj.items[i].deleted == 1) {
+						if (obj.results[i].deleted == 1) {
 							expList = expList + "<span style=\"color: red\">";
 						} else {
 							expList = expList + "<span>";
 						}
-						expList = expList + (obj.items[i].label) + " (ID: " + (obj.items[i].id) + ") <a href=\"ExperimentView.pl?eid=" + (obj.items[i].id) + "\">Info </a>";
-						expList = expList + "<button class='access' onclick='share_dialog(" + obj.items[i].id + ", 3, " + obj.items[i].restricted + ")'>Edit Access</button>";
+						expList = expList + obj.results[i].name + " (id" + obj.results[i].id + ") <a href=\"ExperimentView.pl?eid=" + obj.results[i].id + "\">Info </a>";
+						expList = expList + "<button class='access' onclick='share_dialog(" + obj.results[i].id + ", 3, " + obj.results[i].restricted + ")'>Edit Access</button>";
 						expList = expList + "</span></td></tr>";
 						expCounter++;
 					}
 	
-					if (obj.items[i].type == "notebook") {
-						noteList = noteList + "<tr><td><span onclick=\"modify_item(" + obj.items[i].id + ", 'List', 'restrict');\"";
-						if (obj.items[i].restricted == 1) {
+					if (obj.results[i].type == "notebook") {
+						noteList = noteList + "<tr><td><span onclick=\"modify_item(" + obj.results[i].id + ", 'List', 'restrict');\"";
+						if (obj.results[i].restricted == 1) {
 							noteList = noteList + " class=\"link ui-icon ui-icon-locked\"></span>";
 						} else {
 							noteList = noteList + " class=\"link ui-icon ui-icon-unlocked\"></span>";
 						}
-						noteList = noteList + "<span onclick=\"modify_item(" + obj.items[i].id + ", 'List', 'delete');\"";
+						noteList = noteList + "<span onclick=\"modify_item(" + obj.results[i].id + ", 'List', 'delete');\"";
 						noteList = noteList + " class=\"link ui-icon ui-icon-trash\"></span>";
-						if (obj.items[i].deleted == 1) {
+						if (obj.results[i].deleted == 1) {
 							noteList = noteList + "<span style=\"color: red\">";
 						} else {
 							noteList = noteList + "<span>";
 						}
-						noteList = noteList + (obj.items[i].label) + " (ID: " + (obj.items[i].id) + ") <a href=\"NotebookView.pl?lid=" + (obj.items[i].id) + "\">Info </a>";
-						noteList = noteList + "<button class='access' onclick='share_dialog(" + obj.items[i].id + ", 1 , " + obj.items[i].restricted + ")'>Edit Access</button>";
+						noteList = noteList + obj.results[i].name + " <a href=\"NotebookView.pl?lid=" + obj.results[i].id + "\">Info </a>";
+						noteList = noteList + "<button class='access' onclick='share_dialog(" + obj.results[i].id + ", 1 , " + obj.results[i].restricted + ")'>Edit Access</button>";
 						noteList = noteList + "</span></td></tr>";
 						noteCounter++;
 					}
 							
-					if (obj.items[i].type == "user_group") {
+					if (obj.results[i].type == "user_group") {
 						usrgroupList = usrgroupList + "<tr><td>";
-						if (obj.items[i].deleted == 1) {
+						if (obj.results[i].deleted == 1) {
 							usrgroupList = usrgroupList + "<span style=\"color: red\">";
 						} else {
 							usrgroupList = usrgroupList + "<span>";
 						}
-						usrgroupList = usrgroupList + (obj.items[i].label) + " (ID: " + (obj.items[i].id) + ") ";
-						usrgroupList = usrgroupList + "<button onclick=\"search_user(" + (obj.items[i].id) + ",'group')\">Show Data</button>";
+						usrgroupList = usrgroupList + obj.results[i].name + " (id" + obj.results[i].id + ") ";
+						usrgroupList = usrgroupList + "<button onclick=\"search_user(" + obj.results[i].id + ",'group')\">Show Data</button>";
 						usrgroupList = usrgroupList + "</span></td></tr>";
 						usrgroupCounter++;
 					}
@@ -568,8 +570,14 @@ function search_stuff (search_term) {
 				} else {
 					$(".access").show();
 				}
-			},
-		});
+
+			})
+			.fail(function() {
+				//TODO: Find some way to test this without breaking anything.
+				$("#loading").hide();
+				$("#masterTable").html("An error occured. Please reload the page and try again.");
+			});
+		
 		previous_search = search_term;
 	}
 }
@@ -700,7 +708,7 @@ function user_info(userID, search_type) {
 		success : function(data) {
 			//console.log("Ajax success");
 			var obj = jQuery.parseJSON(data);
-        	//console.log(obj.items);
+        	//console.log(obj);
         		
         	var htmlBlock = "";
 
@@ -739,7 +747,7 @@ function user_info(userID, search_type) {
                             } else {
                             	genList = genList + "<span>";
                             }
-        					genList = genList + (current.label) + " <a href=\"GenomeInfo.pl?gid=" + (current.id) + "\">Info </a>";
+        					genList = genList + current.name + " <a href=\"GenomeInfo.pl?gid=" + current.id + "\">Info </a>";
         					genList = genList + "<button class='access' onclick='share_dialog(" + current.id + ", 2, " + current.restricted + ")'>Edit Access</button>";
         					genList = genList + "</span></td></tr>";
         					genCounter++;
@@ -768,7 +776,7 @@ function user_info(userID, search_type) {
         					} else {
         						expList = expList + "<span>";
         					}
-        					expList = expList + (current.label) + " (ID: " + (current.id) + ") <a href=\"ExperimentView.pl?eid=" + (current.id) + "\">Info </a>";
+        					expList = expList + current.name + " (id" + current.id + ") <a href=\"ExperimentView.pl?eid=" + current.id + "\">Info </a>";
         					expList = expList + "<button class='access' onclick='share_dialog(" + current.id + ", 3, " + current.restricted + ")'>Edit Access</button>";
         					expList = expList + "</span></td></tr>";
         					expCounter++;
@@ -797,7 +805,7 @@ function user_info(userID, search_type) {
         					} else {
         						noteList = noteList + "<span>";
         					}
-        					noteList = noteList + (current.label) + " (ID: " + (current.id) + ") <a href=\"NotebookView.pl?lid=" + (current.id) + "\">Info </a>";
+        					noteList = noteList + current.name + " <a href=\"NotebookView.pl?lid=" + current.id + "\">Info </a>";
         					noteList = noteList + "<button class='access' onclick='share_dialog(" + current.id + ", , " + current.restricted + ")'>Edit Access</button>";
         					noteList = noteList + "</span></td></tr>";
         					noteCounter++;
@@ -805,7 +813,7 @@ function user_info(userID, search_type) {
 						
         				if (current.type == "user") {
         					userList = userList + "<tr><td><span>";
-        					userList = userList + (current.label) + " (ID: " + (current.id) + ") ";
+        					userList = userList + current.first + " " + current.last + ", " + current.email + " (id" + current.id + ") ";
         					userList = userList + "<button onclick=\"search_user(" + current.id + ",'user')\">Search</button>";
         					userList = userList + "</span></td></tr>";
         					userCounter++;
@@ -817,12 +825,14 @@ function user_info(userID, search_type) {
         		var genBlock = "", noteBlock = "", expBlock = "", userBlock = "", nameBlock = "";
 				
         		nameBlock = nameBlock + "<div style=\"padding-top:10px;\">"
-        		if (i == 0) {
+        		if (search_type == "user" && i == 0) {
         			nameBlock = nameBlock + "<img src='picts/user-icon.png' width='15' height='15'><span> ";
+        			nameBlock = nameBlock + obj.items[i].first + " " + obj.items[i].last + ", " + obj.items[i].email + " (" + obj.items[i].username + ", id" + obj.items[i].user_id + "): </span>";
         		} else {
         			nameBlock = nameBlock + "<img src='picts/group-icon.png' width='15' height='15'><span> ";
+        			nameBlock = nameBlock + obj.items[i].user + " (id" + obj.items[i].user_id + "): </span>";
         		}
-        		nameBlock = nameBlock + obj.items[i].user + " (ID: " + obj.items[i].user_id + "): </span>";
+        		
         		
         		if (search_type =='group') {
         			nameBlock = nameBlock + "<button onclick='group_dialog(" + obj.items[i].user_id + ", 6 )'>Edit Group</button></div>";
@@ -2339,10 +2349,9 @@ var System_graph = function(json, element, parent) {
 	this.parent = parent;
 	this.child = null;
 	this.margin = {top: 30, right: 80, bottom: 30, left: 50},
-	this.width = 1200 - this.margin.left - this.margin.right,
-	this.height = 600 - this.margin.top - this.margin.bottom;
+	this.width = $(window).width()*.75 - this.margin.left - this.margin.right,
+	this.height = $(window).height()*.5 - this.margin.top - this.margin.bottom;
 	this.data = json;
-	console.log(json);
 	this.element = element;
 	this.initialize();
 }
@@ -2354,7 +2363,8 @@ $.extend(System_graph.prototype, {
 		// Clear the element, add the zoom out button and svg container
 		$("#" + this.element).html(
 				'<div><button id="' + self.element + '_back_button" class="ui-button ui-corner-all coge-button" style="margin-right:20px;">Zoom Out</button>' +
-				'<div id="' + self.element + '_container" style="height:750px;"> <div id="' + self.element + '_graph" style="float:left;width:1200px;"></div> </div>'
+				'<div id="' + self.element + '_container" style="height:' + (self.height + 250) + 'px;">' +
+				'<div id="' + self.element + '_graph" style="float:left;width:' + (self.width + 200) + 'px;"></div> </div>'
 		);
 		if (self.parent) {
 			$('#' + self.element + '_back_button')
