@@ -10,6 +10,7 @@ use Digest::MD5 qw(md5_base64);
 use CoGeX;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::LogUser;
+use CoGe::Core::Features qw( get_features_in_region );
 no warnings 'redefine';
 
 use vars qw($P $DBNAME $DBHOST $DBPORT $DBUSER $DBPASS $connstr $DATE $DEBUG
@@ -113,7 +114,7 @@ sub gen_html {
     my @all_feats;
     foreach my $item (@ds) {
         push @all_feats,
-          $coge->get_features_in_region(
+          get_features_in_region(
             dataset_id => $item->id,
             chr        => $chr,
             start      => $start,

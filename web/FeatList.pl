@@ -11,7 +11,7 @@ use CoGeX::Result::Feature;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::Utils qw( commify );
 use CoGe::Core::Feature;
-use CoGe::Core::Features qw( get_feature );
+use CoGe::Core::Features qw( get_feature get_features_ids get_features_in_region );
 
 use vars qw($P $PAGE_TITLE $PAGE_NAME
   $TEMPDIR $TEMPURL $USER $DATE $BASEFILE $coge $cogeweb $FORM %FUNCTION);
@@ -227,7 +227,6 @@ sub get_fids {
     my $chr   = $opts{chr};
     my $start = $opts{start};
     my $stop  = $opts{stop};
-    my $search;
     my @dsids;
     push @dsids, $dsid if $dsid;
     my @ids;
@@ -256,33 +255,35 @@ sub get_fids {
             warn "unable to create dsg object for id $dsgid\n";
         }
     }
-    if (@dsids) {
-        $search->{-or} = [ dataset_id => [@dsids] ];
-    }
-    $search->{feature_type_id} = $ftid if $ftid;
-    $search->{chromosome}      = $chr  if $chr;
 
     if ( defined $start ) {
-        @ids = map { $_->id } $coge->get_features_in_region(
+        @ids = map { $_->id } get_features_in_region(
             dataset => $dsid,
             chr     => $chr,
             start   => $start,
             stop    => $stop
         );
         foreach my $item (@dsids) {
-            push @ids, map { $_->id } $coge->get_features_in_region(
+            push @ids, map { $_->id } get_features_in_region(
                 dataset => $item,
                 chr     => $chr,
                 start   => $start,
                 stop    => $stop
             );
         }
-    }
-    else {
-        @ids = map { $_->id } $coge->resultset('Feature')->search($search);
+	    return \@ids;
     }
 
-    return \@ids;
+	my $search;
+    if (@dsids) {
+#		$search->{-or} = [ dataset_id => [@dsids] ];
+	    $search->{dataset} = \@dsids;
+	}
+#   $search->{feature_type_id} = $ftid if $ftid;
+	$search->{type} = $ftid if $ftid;
+	$search->{chromosome} = $chr  if $chr;
+#	@ids = map { $_->id } $coge->resultset('Feature')->search($search);
+	return get_features_ids($search);
 }
 
 sub generate_table {

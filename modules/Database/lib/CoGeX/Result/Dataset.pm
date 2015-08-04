@@ -475,7 +475,7 @@ See Also   :
 
 sub chromosome_count {
     my $self = shift;
-    return get_chromosome_count($self->id);
+    return get_chromosome_count(dataset => $self->id);
 #    my %opts = @_;
 #    my $ftid = $opts{ftid};
 #    my $search;
@@ -565,7 +565,7 @@ sub get_chromosomes {
 #    }
     
 #    if ($max && $self->features( $search, $search_type)->count() > $max ) {
-    if ($max && get_chromosome_count($self->id) > $max) {
+    if ($max && get_chromosome_count(dataset => $self->id) > $max) {
         return;
     }
 
@@ -576,7 +576,7 @@ sub get_chromosomes {
     
     if ($length) {
 #        @data = $self->features( $search, $search_type );
-        @data = CoGe::Core::Features::get_chromosomes($self->id, $search_type);
+        @data = CoGe::Core::Features::get_chromosomes({dataset => $self->id}, $search_type);
     }
     else {
         @data = map { $_->chromosome } $self->features($search, $search_type);
@@ -1598,8 +1598,10 @@ sub user_groups() {
 sub features {
 	my $self = shift;
 	my $search = shift;
+	print STDERR Dumper $search;
 	$search->{dataset} = $self->id;
-	return get_features($search);
+	my $features = get_features($search);
+	return wantarray ? @{$features} : $features;
 }
 
 1;
