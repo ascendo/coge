@@ -38,6 +38,8 @@ use Data::Dumper;
 use Encode qw(encode);
 use JSON::XS;
 
+our $DEBUG = 1;
+
 ################################################ subroutine header begin ##
 
 =head2 copy
@@ -295,6 +297,7 @@ sub get_features {
 		}
 	}
 	$data .= '"query":{"filtered":{"filter":' . build_and_filter($search) . '}},"size":' . $size . '}';
+	print STDERR $data, "\n" if $DEBUG;
 	my $json = elasticsearch_post('coge/features/_search?search_type=scan&scroll=1m', $data);
 	my $o = decode_json($json);
 	$json = elasticsearch_post('_search/scroll?scroll=1m', $o->{_scroll_id});
