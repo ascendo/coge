@@ -22,9 +22,8 @@ BEGIN {
     @EXPORT_OK = qw(genomecmp);
 }
 
-my @LOCATIONS_PREFETCH = (
+#my @LOCATIONS_PREFETCH = (
 #    { "feature_type_id" => 3 },
-    { type => 3 } #,
 #    {
 #        join => [
 #            'locations',
@@ -35,7 +34,7 @@ my @LOCATIONS_PREFETCH = (
 #            { 'dataset' => { 'dataset_connectors' => 'genome' } }
 #        ]
 #    }
-);
+#);
 
 sub genomecmp($$) {
     my ($a, $b) = @_;
@@ -142,7 +141,8 @@ sub _generate_wobble_content {
     my ($at, $gc, $n) = (0) x 3;
 
     foreach my $ds ($genome->datasets()) {
-        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
+#        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
+        foreach my $feat ($ds->features({ type => 3 })) {
             my @gc = $feat->wobble_content( counts => 1 );
             $gc = $gc[0] if $gc[0] && $gc[0] =~ /^\d+$/;
             $at = $gc[1] if $gc[1] && $gc[1] =~ /^\d+$/;
@@ -243,7 +243,8 @@ sub _generate_wobble_gc_diff {
     my $data = [];
 
     foreach my $ds ($genome->datasets) {
-        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
+#        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
+        foreach my $feat ($ds->features({ type => 3 })) {
             my @wgc  = $feat->wobble_content();
             my @gc   = $feat->gc_content();
             my $diff = $gc[0] - $wgc[0] if defined $gc[0] && defined $wgc[0];
@@ -272,22 +273,23 @@ sub _generate_feature_type_gc {
 
     my ($at, $gc, $n) = (0) x 3;
 
-    my @params = (
-        { "feature_type_id" => $typeid },
-        {
-            join => [
-                'locations',
-                { 'dataset' => { 'dataset_connectors' => 'genome' } }
-            ],
-            prefetch => [
-                'locations',
-                { 'dataset' => { 'dataset_connectors' => 'genome' } }
-            ],
-        }
-    );
+#    my @params = (
+#        { "feature_type_id" => $typeid },
+#        {
+#            join => [
+#                'locations',
+#                { 'dataset' => { 'dataset_connectors' => 'genome' } }
+#            ],
+#            prefetch => [
+#                'locations',
+#                { 'dataset' => { 'dataset_connectors' => 'genome' } }
+#            ],
+#        }
+#    );
 
     foreach my $ds ($genome->datasets) {
-        my @feats = $ds->features(@params);
+#        my @feats = $ds->features(@params);
+        my @feats = $ds->features({ type => $typeid});
 
         foreach my $feat (@feats) {
             my $seq = substr(
@@ -373,7 +375,8 @@ sub _generate_noncoding_gc_stats {
     }
 
     foreach my $ds (@datasets) {
-        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
+#        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
+        foreach my $feat ($ds->features({ type => 3 })) {
             foreach my $loc ( $feat->locs ) {
                 if ( $loc->stop > length( $seqs{ $feat->chromosome } ) ) {
                     print STDERR "feature "

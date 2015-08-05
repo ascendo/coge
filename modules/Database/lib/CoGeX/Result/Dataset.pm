@@ -496,7 +496,8 @@ sub has_gene_annotation {
     my $self = shift;
 
     #my %opts = @_;
-    return $self->features( { 'feature_type_id' => { -in => [ 1, 2, 3 ] } } )
+#    return $self->features( { 'feature_type_id' => { -in => [ 1, 2, 3 ] } } )
+    return $self->features( { type => [ 1, 2, 3 ] } )
       ->count;
 }
 
@@ -861,8 +862,9 @@ sub gff {
         my $rs_feat = $ds->features(
             { chromosome => $chr }, # mdb added 4/23/14 issue 364
             {
-                'prefetch' => $prefetch,
-                'order_by' => [ 'me.chromosome', 'me.start', 'me.feature_type_id'
+#                'prefetch' => $prefetch,
+#                'order_by' => [ 'me.chromosome', 'me.start', 'me.feature_type_id'
+                'sort' => [ 'chromosome', 'start', 'type'
                   ] #go by order in genome, then make sure that genes (feature_type_id == 1) is first
             }
         );
@@ -1131,14 +1133,18 @@ sub _feat_search {
 
     return $ds->features(
         {
-            'me.chromosome'      => $chr,
-            'feature_names.name' => { 'IN' => $name_search },
-            'me.feature_type_id' => { 'NOT IN' => $skip_ftids },
+#            'me.chromosome'      => $chr,
+#            'feature_names.name' => { 'IN' => $name_search },
+#            'me.feature_type_id' => { 'NOT IN' => $skip_ftids },
+            chromosome => $chr,
+            'names.name' => $name_search,
+            'not' => { type => $skip_ftids }
         },
         {
-            'join'     => 'feature_names',
-            'prefetch' => [ 'feature_type', 'locations' ],
-            'order_by' => [ 'me.start', 'locations.start', 'me.feature_type_id' ]
+#            'join'     => 'feature_names',
+#            'prefetch' => [ 'feature_type', 'locations' ],
+#            'order_by' => [ 'me.start', 'locations.start', 'me.feature_type_id' ]
+            'sort' => [ 'start', 'locations.start', 'type' ]
         }
     );
 }

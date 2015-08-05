@@ -37,6 +37,7 @@ use CoGeX;
 use Data::Dumper;
 use Encode qw(encode);
 use JSON::XS;
+use Search::Elasticsearch;
 
 ################################################ subroutine header begin ##
 
@@ -85,22 +86,22 @@ See Also   :
 sub copy_rows {
 	my $features = shift;
 	my $dbh = shift;
+	my $e = Search::Elasticsearch->new();
 	my $json_xs = JSON::XS->new->allow_nonref;
     while (my $feature = $features->fetchrow_arrayref) {
     	my $feature_id = $feature->[0];
-		my $json = '{';
-		$json .= '"type":' . $feature->[1] . ',"dataset":' . $feature->[2];
+    	my $body = { type => $feature->[1], dataset => $feature->[2] };
 		if ($feature->[3]) {
-			$json .= ',"start":' . $feature->[3];
+			$body->{start} = $feature->[3];
 		}
 		if ($feature->[4]) {
-			$json .= ',"stop":' . $feature->[4];
+			$body->{stop} = $feature->[4];
 		}
 		if ($feature->[5]) {
-			$json .= ',"strand":' . $feature->[5];
+			$body->{strand} = $feature->[5];
 		}
 		if ($feature->[6]) {
-			$json .= ',"chromosome":"' . $feature->[6] . '"';
+			$body->{chromosome} = $feature->[6];
 		}
 	    my $names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id=' . $feature_id);
 	    $names->execute;
@@ -300,10 +301,14 @@ sub get_features {
 	$json = elasticsearch_post('_search/scroll?scroll=1m', $o->{_scroll_id});
 	$o = decode_json($json);
 	my @hits;
-	foreach (@{$o->{hits}->{hits}}) {
-		my $feature = $_->{_source};
-		$feature->{id} = $_->{_id};
-		push(@hits, bless($feature, 'CoGe::Core::Feature'));
+	if (@hits) {
+		foreach (@{$o->{hits}->{hits}}) {
+			my $feature = $_->{_source};
+			$feature->{id} = $_->{_id};
+			push(@hits, bless($feature, 'CoGe::Core::Feature'));
+		}
+	} else {
+		print STDERR 'no hits for query: ' . $data . "\n";
 	}
 	return wantarray ? @hits : \@hits;
 }

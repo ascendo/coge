@@ -50,9 +50,13 @@ sub build_filter {
 	my $field = shift;
 	my $value = shift;
 	if (ref($value) eq 'ARRAY') {
+		my @terms = $value;
+		if (scalar @terms == 1) {
+			return '{"term":{"' . $field . '":"' . @terms[0] . '"}}';
+		}
 		my $json = '{"terms":{"' . $field . '":[';
 		my $first = 1;
-		for my $term (@{$value}) {
+		for my $term (@terms) {
 			if ($first) {
 				$first = 0;
 			} else {
@@ -76,13 +80,18 @@ sub build_filter {
 		}
 		return $json . '}}}';
 	}
+	if ($field eq 'not') {
+		my @keys = keys %$value;
+		my $key = @keys[0];
+		return '{"not":' . build_filter($key, $value->{$key}) . '}';
+	}
 	if ($field eq '-and') {
-		return build_filters_filter('and', shift);
+		return build_filters_filter('and', $value);
 	}
 	if ($field eq '-or') {
-		return build_filters_filter('or', shift);
+		return build_filters_filter('or', $value);
 	}
-	return '{"term":{"' . $field . '":' . $value . '}}';
+	return '{"term":{"' . $field . '":"' . $value . '"}}';
 }
 
 ################################################ subroutine header begin ##
