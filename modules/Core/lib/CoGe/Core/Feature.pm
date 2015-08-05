@@ -94,7 +94,7 @@ sub aa_frequency {
 	my ($seq) = $opts{seq} || $self->protein_sequence( gstid => $gstid );
 	return \%data unless $seq;
 
-	foreach ( split //, $seq ) {
+	foreach ( split(//, $seq) ) {
 		next if $_ eq "*";
 		$data{$_}++ if defined $data{$_};
 	}
