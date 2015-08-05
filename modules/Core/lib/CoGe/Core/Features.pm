@@ -59,11 +59,13 @@ See Also   :
 
 sub copy {
 	my $dataset_id = shift;
+	my $index = shift || 'coge'; # optional index name
+	
     my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
     my $query = 'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature WHERE dataset_id=' . $dataset_id;
     my $features = $dbh->prepare($query);
     $features->execute;
-    copy_rows($features, $dbh);
+    copy_rows($features, $dbh, $index);
 }
 
 ################################################ subroutine header begin ##
@@ -87,7 +89,9 @@ See Also   :
 sub copy_rows {
 	my $features = shift;
 	my $dbh = shift;
+	my $index = shift || 'coge'; # optional index name
 	my $json_xs = JSON::XS->new->allow_nonref;
+	
     while (my $feature = $features->fetchrow_arrayref) {
     	my $feature_id = $feature->[0];
 		my $json = '{';
@@ -153,9 +157,8 @@ sub copy_rows {
 		}
 		$json .= ']}';
 		print $feature_id . ' ';
-		elasticsearch_post('coge/features/' . $feature_id, $json);
+		elasticsearch_post($index . '/features/' . $feature_id, $json);
 	}
-	
 }
 
 ################################################ subroutine header begin ##
@@ -253,7 +256,9 @@ See Also   :
 
 sub get_feature {
 	my $id = shift;
-	my $json = elasticsearch_get('coge/features/' . $id . '/_source');
+	my $index = shift || 'coge'; # optional index name
+	
+	my $json = elasticsearch_get($index . '/features/' . $id . '/_source');
 	my $feature = decode_json($json);
 	$feature->{id} = $id;
 	return bless($feature, 'CoGe::Core::Feature');
@@ -283,6 +288,7 @@ See Also   :
 sub get_features {
 	my $search = shift;
 	my $options = shift;
+	my $index = shift || 'coge'; # optional index name
 	my $data = '{';
 	my $size = 10000000;
 
@@ -298,7 +304,7 @@ sub get_features {
 	}
 	$data .= '"query":{"filtered":{"filter":' . build_and_filter($search) . '}},"size":' . $size . '}';
 	print STDERR $data, "\n" if $DEBUG;
-	my $json = elasticsearch_post('coge/features/_search?search_type=scan&scroll=1m', $data);
+	my $json = elasticsearch_post($index . '/features/_search?search_type=scan&scroll=1m', $data);
 	my $o = decode_json($json);
 	$json = elasticsearch_post('_search/scroll?scroll=1m', $o->{_scroll_id});
 	$o = decode_json($json);
