@@ -1,0 +1,12 @@
+curl localhost:9200/coge/features/_search -d '{
+  "fields": [
+    "_id"
+  ],
+  "query": {
+    "match_all": {}
+  },
+  "sort": {
+    "_id": "desc"
+  },
+  "size": 1
+}'

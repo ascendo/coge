@@ -142,34 +142,42 @@ sub get_locs {
 
     foreach my $chr (@chrs) {
         my %seen    = ();
-        my $gene_rs = $coge->resultset('Feature')->search(
+#        my $gene_rs = $coge->resultset('Feature')->search(
+		my $features = get_features(
             {
-                'me.dataset_id' => { 'IN' => $datasets },
-                'me.chromosome' => $chr,
+#                'me.dataset_id' => { 'IN' => $datasets },
+#                'me.chromosome' => $chr,
+                dataset => $datasets,
+                chromosome => $chr,
                 # NOTE: should probably check for pseudogenes as well!!
-                'feature_type.name' => {
-                    'IN' => [
-                        'gene',                 'pseudogene',
-                        'transposon',           'Transposable Element',
-                        'transposable_element', 'transposable_element_gene'
-                    ]
-                }
+#                'feature_type.name' => {
+#                    'IN' => [
+#                        'gene',                 'pseudogene',
+#                        'transposon',           'Transposable Element',
+#                        'transposable_element', 'transposable_element_gene'
+#                    ]
+#                }
+				type => [ 1, 256, 480, 285, 319, 324 ]
             },
             {
-                'prefetch' => [ 'feature_type', 'feature_names' ],
-                'order_by' => ['me.start']
+#                'prefetch' => [ 'feature_type', 'feature_names' ],
+#                'order_by' => ['me.start']
+                sort => 'start'
             }
         );
 
         my %chrs;
 #        print STDERR "dataset_ids: " . join(",", @$datasets) . ";  chr: $chr\n";
-        while ( my $g = $gene_rs->next() ) {
-            if ( $fids{ $g->feature_id } ) { next; }
-            $fids{ $g->feature_id } = 1;
-            my @gene_names;
-            @gene_names = $g->feature_names();
+#        while ( my $g = $gene_rs->next() ) {
+		for my $feature ( @{$features} ) {
+#            if ( $fids{ $g->feature_id } ) { next; }
+            if ( $fids{ $feature->id } ) { next; }
+            $fids{ $feature->id } = 1;
+#            my @gene_names = $g->feature_names();
+            my $gene_names = $feature->names;
             my $gene_name;
-            foreach my $name (@gene_names) {
+#            foreach my $name (@gene_names) {
+            foreach my $name (@{$gene_names}) {
                 $gene_name = $name->name;
                 if ( !$names{$gene_name} ) { last; }
                 $gene_name = "";
@@ -192,7 +200,7 @@ sub get_locs {
                 }
             );
 
-            my $strand = $g->strand == 1 ? '+' : '-';
+            my $strand = $feature->strand == 1 ? '+' : '-';
             my $clean_name = $gene_name;
             $names{$gene_name} = 1;
             $clean_name =~ s/\s+/_/g;
@@ -212,11 +220,11 @@ sub get_locs {
             }
 
             my @data;
-            $chrs{ $g->chr } = 1;
+            $chrs{ $feature->chr } = 1;
             if ( scalar(@locs) != 0 ) {
                 @data = (
-                    $chr, $g->start - 1,
-                    $g->stop, $clean_name, $g->stop - $g->start,
+                    $chr, $feature->start - 1,
+                    $feature->stop, $clean_name, $feature->stop - $feature->start,
                     $strand, ".", ".", ".", scalar(@locs) / 2
                 );
             }
@@ -249,20 +257,20 @@ sub get_locs {
                 }
 
                 @data = (
-                    $chr, $g->start - 1,
-                    $g->stop, $clean_name, $g->stop - $g->start,
+                    $chr, $feature->start - 1,
+                    $feature->stop, $clean_name, $feature->stop - $feature->start,
                     $strand, ".", ".", "."
                 );    #, scalar(@locs)/2);
                 push( @data, $ftype ? scalar(@locs) / 2 : 1 );
             }
             if ( scalar(@locs) == 0 ) {
-                @locs = ( $g->start, $g->stop );
+                @locs = ( $feature->start, $feature->stop );
             }
-            my $start = $g->start < $locs[0] ? $g->start : $locs[0];
+            my $start = $feature->start < $locs[0] ? $feature->start : $locs[0];
             $data[1] = $start - 1;
             push( @data, get_sizes( \@locs ) );
             push( @data, get_starts( \@locs, $start ) );
-            my $gstr = join( "\t", @data, $g->type->name );
+            my $gstr = join( "\t", @data, $feature->type->name );
             print $gstr . "\n";
         }
     }

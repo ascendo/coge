@@ -1,0 +1,5 @@
+rm start
+rm stop
+touch start
+./dump.pl > stdout 2> stderr
+touch stop
