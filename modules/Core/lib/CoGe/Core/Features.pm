@@ -300,10 +300,9 @@ sub get_features {
 	foreach (@{$o->{hits}->{hits}}) {
 		my $feature = $_->{_source};
 		$feature->{id} = $_->{_id};
-		push (@hits, bless($feature, 'CoGe::Core::Feature'));
+		push(@hits, bless($feature, 'CoGe::Core::Feature'));
 	}
-	my $hits = @hits;
-	return @hits;
+	return wantarray ? @hits : \@hits;
 }
 
 ################################################ subroutine header begin ##
