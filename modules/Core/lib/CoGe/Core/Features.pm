@@ -648,13 +648,17 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_type_counts {
-	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_filter('dataset' => shift) . '}},"aggs":{"count":{"terms":{"field":"type"}}}}');
+    my $dataset = shift;
+    my $index = shift || 'coge'; # optional index name
+    
+	my $json = elasticsearch_post($index . '/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_filter('dataset' => $dataset) . '}},"aggs":{"count":{"terms":{"field":"type"}}}}');
 	my $o = decode_json($json);
 	my %counts;
 	foreach (@{$o->{aggregations}->{count}->{buckets}}) {
 		$counts{$_->{key}} = $_->{doc_count};
 	}
-	return %counts;
+	
+	return \%counts;
 }
 
 1;
