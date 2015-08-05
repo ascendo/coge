@@ -27,6 +27,7 @@ use CoGe::Accessory::chaos_report;
 use CoGe::Accessory::GenomeThreader_report;
 use CoGe::Accessory::dialign_report;
 use CoGe::Accessory::dialign_report::anchors;
+use CoGe::Core::Features qw( get_features_in_region );
 use CoGe::Graphics;
 use CoGe::Graphics::Chromosome;
 use CoGe::Graphics::Feature;
@@ -2880,7 +2881,7 @@ sub get_obj_from_genome_db {
     my $t4 = new Benchmark;
 
     #print STDERR "Region: $chr: $start-$stop\n";# if $DEBUG;
-    my %feats = map { $_->id, $_ } $coge->get_features_in_region(
+    my %feats = map { $_->id, $_ } get_features_in_region(
         start      => $start,
         stop       => $stop,
         chr        => $chr,

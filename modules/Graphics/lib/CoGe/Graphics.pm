@@ -1,6 +1,7 @@
 package CoGe::Graphics;
 use strict;
 use base qw(Class::Accessor);
+use CoGe::Core::Features qw( get_features_in_region );
 use CoGe::Graphics::Chromosome;
 use CoGe::Graphics::Feature;
 use CoGe::Graphics::Feature::Gene;
@@ -567,7 +568,7 @@ sub process_features
 	my @feats;
 	foreach my $id (@dsids)
 	  {
-	 	push @feats, $coge->get_features_in_region( start => $start, end => $stop, dataset => $id, chr => $chr, ftid => $ftid );
+	 	push @feats, get_features_in_region( start => $start, end => $stop, dataset => $id, chr => $chr, ftid => $ftid );
 	  }
 	my @tmp1;
 	my @tmp2;
@@ -595,7 +596,7 @@ sub process_features
             @feats = undef;
             foreach my $id (@dsids)
              {
-                push @feats, $coge->get_features_in_region( start => $start, end => $stop, dataset => $id, chr => $chr, ftid => $ftid );
+                push @feats, get_features_in_region( start => $start, end => $stop, dataset => $id, chr => $chr, ftid => $ftid );
              }
 	  }
 

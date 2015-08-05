@@ -23,17 +23,18 @@ BEGIN {
 }
 
 my @LOCATIONS_PREFETCH = (
-    { "feature_type_id" => 3 },
-    {
-        join => [
-            'locations',
-            { 'dataset' => { 'dataset_connectors' => 'genome' } }
-        ],
-        prefetch => [
-            'locations',
-            { 'dataset' => { 'dataset_connectors' => 'genome' } }
-        ]
-    }
+#    { "feature_type_id" => 3 },
+    { type => 3 } #,
+#    {
+#        join => [
+#            'locations',
+#            { 'dataset' => { 'dataset_connectors' => 'genome' } }
+#        ],
+#        prefetch => [
+#            'locations',
+#            { 'dataset' => { 'dataset_connectors' => 'genome' } }
+#        ]
+#    }
 );
 
 sub genomecmp($$) {

@@ -2,7 +2,7 @@ package CoGe::Core::Features;
 
 BEGIN {
 	use Exporter 'import';
-	our @EXPORT_OK = qw( get_chromosome_count get_feature get_features get_total_chromosomes_length get_type_counts );
+	our @EXPORT_OK = qw( get_chromosome_count get_feature get_features get_features_ids get_features_in_region get_total_chromosomes_length get_type_counts );
 }
 
 =head1 NAME
@@ -32,7 +32,7 @@ use strict;
 use warnings;
 
 use CoGe::Accessory::Web qw(get_defaults);
-use CoGe::Core::Elasticsearch qw(build_filter build_terms_filter elasticsearch_get elasticsearch_post);
+use CoGe::Core::Elasticsearch qw(build_and_filter build_filter elasticsearch_get elasticsearch_post);
 use CoGeX;
 use Data::Dumper;
 use Encode qw(encode);
@@ -193,7 +193,7 @@ sub dump {
  Usage     :
  Purpose   :
  Returns   : the number of chromosome features for the dataset
- Argument  : id of the dataset
+ Argument  : search hash, must contain at least dataset => id of the dataset
  Throws    :
  Comments  :
 
@@ -204,7 +204,9 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_chromosome_count {
-	return get_type_count(shift, 4); # 4 is the feature_type_id for chromosomes
+	my %search = @_;
+	$search{type} = 4; # 4 is the feature_type_id for chromosomes
+	return get_features_count(\%search);
 }
 
 ################################################ subroutine header begin ##
@@ -214,7 +216,7 @@ sub get_chromosome_count {
  Usage     :
  Purpose   :
  Returns   : array of the chromosome features for the dataset
- Argument  : id of the dataset, options - optional hash passed on to get_features
+ Argument  : search hash, must contain at least dataset => id of the dataset
  Throws    :
  Comments  :
 
@@ -225,8 +227,9 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_chromosomes {
-	my $search = { dataset => shift, type => 4 }; # 4 is the feature_type_id for chromosomes
-	return get_features($search, shift);
+	my %search = @_;
+	$search{type} = 4; # 4 is the feature_type_id for chromosomes
+	return get_features(\%search, shift);
 }
 
 ################################################ subroutine header begin ##
@@ -247,10 +250,10 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_feature {
-	my $json = elasticsearch_get('coge/features/' . shift);
-	my $o = decode_json($json);
-	my $feature = $o->{_source};
-	$feature->{id} = $o->{_id};
+	my $id = shift;
+	my $json = elasticsearch_get('coge/features/' . $id . '/_source');
+	my $feature = decode_json($json);
+	$feature->{id} = $id;
 	return bless($feature, 'CoGe::Core::Feature');
 }
 
@@ -259,7 +262,7 @@ sub get_feature {
 =head2 get_features
 
  Usage     : 
- Purpose   : get all features for a dataset
+ Purpose   : get features for a dataset
  Returns   : array of feature hashes
  Argument  : search - hash of fields to query, options (optional) - hash of query options
  Throws    :
@@ -291,7 +294,7 @@ sub get_features {
 			$data .= '"sort":' . $sort . ',';
 		}
 	}
-	$data .= '"query":{"filtered":{"filter":' . build_filter($search) . '}},"size":' . $size . '}';
+	$data .= '"query":{"filtered":{"filter":' . build_and_filter($search) . '}},"size":' . $size . '}';
 	my $json = elasticsearch_post('coge/features/_search?search_type=scan&scroll=1m', $data);
 	my $o = decode_json($json);
 	$json = elasticsearch_post('_search/scroll?scroll=1m', $o->{_scroll_id});
@@ -304,6 +307,295 @@ sub get_features {
 	}
 	return wantarray ? @hits : \@hits;
 }
+
+################################################ subroutine header begin ##
+
+=head2 get_features_ids
+
+ Usage     : 
+ Purpose   : 
+ Returns   : array of ids of matching features for a dataset
+ Argument  : search - hash of fields to query
+ Throws    :
+ Comments  : for search: dataset - required: id of the dataset
+ 			 chromosome - optional: to only return features from one chromosome
+ 			 type - optional: feature_type_id, to only return features of the specified type
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_features_ids {
+	my $search = shift;
+	my $json = elasticsearch_post('coge/features/_search', '{"query":{"filtered":{"filter":' . build_and_filter($search) . '}},"size":10000000}');
+	my $o = decode_json($json);
+	my @ids;
+	foreach (@{$o->{hits}->{hits}}) {
+		push (@ids, $_->{_id});
+	}
+	return \@ids;
+}
+
+################################################ subroutine header begin ##
+
+=head2 get_features_count
+
+ Usage     :
+ Purpose   :
+ Returns   : the number of features of the passed in type for the dataset
+ Argument  : search hash, must contain at least dataset => id of the dataset
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_features_count {
+	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_and_filter(shift) . '}}}');
+	my $o = decode_json($json);
+	return $o->{hits}->{total};
+}
+
+################################################ subroutine header begin ##
+
+=head2 get_features_in_region
+
+ Usage     : $object->get_features_in_region(start   => $start,
+                                             stop    => $stop,
+                                             chr     => $chr,
+                                             ftid    => $ftid,
+                                             dataset_id => $dataset->id(),);
+
+ Purpose   : gets all the features in a specified genomic region
+ Returns   : an array or an array_ref of feature objects (wantarray)
+ Argument  : start   => genomic start position
+             stop    => genomic stop position
+             chr     => chromosome
+             dataset_id => dataset id in database (obtained from a
+                        CoGe::Dataset object)
+                        of the dna seq will be returned
+             OPTIONAL
+             count   => flag to return only the number of features in a region
+             ftid    => limit features to those with this feature type id
+ Throws    : none
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_features_in_region {
+    my %opts = @_;
+    my $start =
+         $opts{'start'}
+      || $opts{'START'}
+      || $opts{begin}
+      || $opts{BEGIN};
+    $start = 1 unless $start;
+    my $stop = $opts{'stop'} || $opts{STOP} || $opts{end} || $opts{END};
+    $stop = $start unless defined $stop;
+    my $chr = $opts{chr};
+    $chr = $opts{chromosome} unless defined $chr;
+    my $dataset_id =
+         $opts{dataset}
+      || $opts{dataset_id}
+      || $opts{info_id}
+      || $opts{INFO_ID}
+      || $opts{data_info_id}
+      || $opts{DATA_INFO_ID};
+    my $genome_id  = $opts{gid};
+#    my $count_flag = $opts{count} || $opts{COUNT};
+    my $ftid       = $opts{ftid};
+
+    if ( ref($ftid) =~ /array/i ) {
+        $ftid = undef unless @$ftid;
+    }
+    my @dsids;
+    push @dsids, $dataset_id if $dataset_id;
+    if ($genome_id) {
+        my $genome = CoGeX->dbconnect(get_defaults())->resultset('Genome')->find($genome_id);
+        push @dsids, map { $_->id } $genome->datasets if $genome;
+    }
+#    if ($count_flag) {
+#        return $self->resultset('Feature')->count(
+#            {
+#                "me.chromosome" => $chr,
+#                "me.dataset_id" => [@dsids],
+#                -and            => [
+#                    "me.start" => { "<=" => $stop },
+#                    "me.stop"  => { ">=" => $start },
+#                ],
+#
+#                #  -and=>[
+#                # 	  -or=>[
+#                # 		-and=>[
+#                # 		       "me.stop"=>  {"<=" => $stop},
+#                # 		       "me.stop"=> {">=" => $start},
+#                # 		      ],
+#                # 		-and=>[
+#                # 		       "me.start"=>  {"<=" => $stop},
+#                # 		       "me.start"=> {">=" => $start},
+#                # 		      ],
+#                # 		-and=>[
+#                # 		       "me.start"=>  {"<=" => $start},
+#                # 		       "me.stop"=> {">=" => $stop},
+#                # 		      ],
+#                # 	       ],
+#                # 	 ],
+#            },
+#            {
+#
+#                #						   prefetch=>["locations", "feature_type"],
+#            }
+#        );
+		return get_features_count(chromosome => $chr, dataset => \@dsids, -and => [{start => { 'lte' => $stop}}, {stop => { 'gte' => $start }}]);
+#    }
+#    my %search = (
+#        "me.chromosome" => $chr,
+#        "me.dataset_id" => [@dsids],
+#        -and            => [
+#            "me.start" => { "<=" => $stop },
+#            "me.stop"  => { ">=" => $start },
+#        ],
+#
+#        # -and=>[
+#        # 	-or=>[
+#        # 	      -and=>[
+#        # 		     "me.stop"=>  {"<=" => $stop},
+#        # 		     "me.stop"=> {">=" => $start},
+#        # 		    ],
+#        # 	      -and=>[
+#        # 		     "me.start"=>  {"<=" => $stop},
+#        # 		     "me.start"=> {">=" => $start},
+#        # 		    ],
+#        # 	      -and=>[
+#        # 		     "me.start"=>  {"<=" => $start},
+#        # 		     "me.stop"=> {">=" => $stop},
+#        # 		    ],
+#        # 	     ],
+#        #      ]
+#    );
+#    $search{"me.feature_type_id"} = { "IN" => $ftid } if $ftid;
+#    my @feats = $self->resultset('Feature')->search(
+#        \%search,
+#        {
+#
+#            #					     prefetch=>["locations", "feature_type"],
+#            #						     order_by=>"me.start",
+#        }
+#    );
+print STDERR "get_features_in_region\n";
+    my %search = (chromosome => $chr, dataset => \@dsids, -and => [{start => { 'lte' => $stop}}, {stop => { 'gte' => $start }}]);
+    $search{type} = $ftid if $ftid;
+	my $features =  get_features(%search);
+#    return wantarray ? @feats : \@feats;
+    return wantarray ? @{$features} : $features;
+}
+
+# apparently not used
+#sub get_features_in_region_split {
+#    my $self = shift;
+#    my %opts = @_;
+#    my $start =
+#         $opts{'start'}
+#      || $opts{'START'}
+#      || $opts{begin}
+#      || $opts{BEGIN};
+#    $start = 0 unless $start;
+#    my $stop = $opts{'stop'} || $opts{STOP} || $opts{end} || $opts{END};
+#    $stop = $start unless defined $stop;
+#    my $chr = $opts{chr};
+#    $chr = $opts{chromosome} unless defined $chr;
+#    my $dataset_id =
+#         $opts{dataset}
+#      || $opts{dataset_id}
+#      || $opts{info_id}
+#      || $opts{INFO_ID}
+#      || $opts{data_info_id}
+#      || $opts{DATA_INFO_ID};
+#
+#    my @startfeats = $self->resultset('Feature')->search(
+#        {
+#            "me.chromosome" => $chr,
+#            "me.dataset_id" => $dataset_id,
+#            -and            => [
+#                "me.stop" => { ">=" => $start },
+#                "me.stop" => { "<=" => $stop },
+#            ],
+#        },
+#        { prefetch => [ "locations", "feature_type" ], }
+#    );
+#    my @stopfeats = $self->resultset('Feature')->search(
+#        {
+#            "me.chromosome" => $chr,
+#            "me.dataset_id" => $dataset_id,
+#            -and            => [
+#                "me.start" => { ">=" => $start },
+#                "me.start" => { "<=" => $stop },
+#            ],
+#        },
+#        { prefetch => [ "locations", "feature_type" ], }
+#    );
+#
+#    my %seen;
+#    my @feats;
+#
+#    foreach my $f (@startfeats) {
+#        if ( not exists $seen{ $f->id() } ) {
+#            $seen{ $f->id() } += 1;
+#            push( @feats, $f );
+#        }
+#    }
+#
+#    foreach my $f (@stopfeats) {
+#        if ( not exists $seen{ $f->id() } ) {
+#            $seen{ $f->id() } += 1;
+#            push( @feats, $f );
+#        }
+#    }
+#
+#    return wantarray ? @feats : \@feats;
+#}
+
+# apparently not used
+################################################# subroutine header begin ##
+#
+#=head2 count_features_in_region
+#
+# Usage     : $object->count_features_in_region(start   => $start,
+#                                             stop    => $stop,
+#                                             chr     => $chr,
+#                                             dataset_id => $dataset->id());
+#
+# Purpose   : counts the features in a specified genomic region
+# Returns   : an integer
+# Argument  : start   => genomic start position
+#             stop    => genomic stop position
+#             chr     => chromosome
+#             dataset_id => dataset id in database (obtained from a
+#                        CoGe::Dataset object)
+#                        of the dna seq will be returned
+# Throws    : none
+# Comments  :
+#
+#See Also   :
+#
+#=cut
+#
+################################################### subroutine header end ##
+#
+#sub count_features_in_region {
+#    my $self = shift;
+#    my %opts = @_;
+#    return $self->get_features_in_region( %opts, count => 1 );
+#}
 
 ################################################ subroutine header begin ##
 
@@ -324,33 +616,9 @@ See Also   :
 
 sub get_total_chromosomes_length {
 	my $search = { dataset => shift, type => 4 }; # 4 is feature_type_id of chromosomes
-	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_filter($search) . '}},"aggs":{"length":{"sum":{"field":"stop"}}}}');
+	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_and_filter($search) . '}},"aggs":{"length":{"sum":{"field":"stop"}}}}');
 	my $o = decode_json($json);
 	return $o->{aggregations}->{length}->{value};
-}
-
-################################################ subroutine header begin ##
-
-=head2 get_type_count
-
- Usage     :
- Purpose   :
- Returns   : the number of features of the passed in type for the dataset
- Argument  : id of the dataset, type id
- Throws    :
- Comments  :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub get_type_count {
-	my $search = { dataset => shift, type => shift };
-	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_filter($search) . '}}}');
-	my $o = decode_json($json);
-	return $o->{hits}->{total};
 }
 
 ################################################ subroutine header begin ##
@@ -371,7 +639,7 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_type_counts {
-	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_terms_filter('dataset', @_) . '}},"aggs":{"count":{"terms":{"field":"type"}}}}');
+	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_filter('dataset' => shift) . '}},"aggs":{"count":{"terms":{"field":"type"}}}}');
 	my $o = decode_json($json);
 	my %counts;
 	foreach (@{$o->{aggregations}->{count}->{buckets}}) {

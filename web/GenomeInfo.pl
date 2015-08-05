@@ -260,7 +260,7 @@ sub get_feature_counts {
 #            name  => $row->[1],
 #        };
 #    }
-	my %feature_counts = get_type_counts(@$dsids);
+	my %feature_counts = get_type_counts($dsids);
 	my $feats;
 	foreach my $key (keys %feature_counts) {
 		$feats->{$types->{$key}} = {

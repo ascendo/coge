@@ -2,7 +2,7 @@ package CoGe::Core::Elasticsearch;
 
 BEGIN {
 	use Exporter 'import';
-	@EXPORT_OK = qw( build_filter build_terms_filter elasticsearch_get elasticsearch_post );
+	@EXPORT_OK = qw( build_and_filter build_filter elasticsearch_get elasticsearch_post );
 }
 
 use Data::Dumper;
@@ -10,7 +10,7 @@ use LWP::UserAgent;
 
 ################################################ subroutine header begin ##
 
-=head2 build_filter
+=head2 build_and_filter
 
  Usage     : 
  Purpose   :
@@ -25,38 +25,20 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub build_filter {
-	my $search = shift;
-	my $size = keys %$search;
-	my $json;
-	if ($size > 1) {
-		$json = '{"and":[';
-	}
-	my $first = 1;
-	for my $key (keys %$search) {
-		if ($first) {
-			$first = 0;
-		} else {
-			$json .= ',';
-		}
-		$json .= build_terms_filter($key, $search->{$key});
-	}
-	if ($size > 1) {
-		$json .= ']}';
-	}
-	return $json;
+sub build_and_filter {
+	return build_filters_filter('and', shift);
 }
 
 ################################################ subroutine header begin ##
 
-=head2 build_terms_filter
+=head2 build_filter
 
  Usage     : 
  Purpose   :
  Returns   : JSON for a filter of one or more terms 
  Argument  : field, value(s)
  Throws    :
- Comments  : if more than one term is passed in, a "terms" filter will be built, otherwise a "term" filter will be built
+ Comments  : if more than one term is passed in, a "terms" filter will be built, otherwise a boolean, range or "term" filter will be built
 
 See Also   :
 
@@ -64,25 +46,77 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub build_terms_filter {
+sub build_filter {
 	my $field = shift;
-	my $size = @_;
-	if ($size == 1) {
-		return '{"term":{"' . $field . '":' . shift . '}}';
+	my $value = shift;
+	if (ref($value) eq 'ARRAY') {
+		my $json = '{"terms":{"' . $field . '":[';
+		my $first = 1;
+		for my $term (@{$value}) {
+			if ($first) {
+				$first = 0;
+			} else {
+				$json .= ',';
+			}
+			$json .= '"' . $term . '"'; # note: doesn't yet encode values
+		}
+		$json .= ']}}';
+		return $json;
 	}
+	if (ref($value) eq 'HASH') {
+		my $json = '{"range":{"' . $field . '":{';
+		my $first = 1;
+		for my $op (keys %$value) {
+			if ($first) {
+				$first = 0;
+			} else {
+				$json .= ',';
+			}
+			$json .= '"' . $op . '":' . $value->{$op};
+		}
+		return $json . '}}}';
+	}
+	if ($field eq '-and') {
+		return build_filters_filter('and', shift);
+	}
+	if ($field eq '-or') {
+		return build_filters_filter('or', shift);
+	}
+	return '{"term":{"' . $field . '":' . $value . '}}';
+}
 
-	my $json = '{"terms":{"' . $field . '":[';
+################################################ subroutine header begin ##
+
+=head2 build_filters_filter
+
+ Usage     : 
+ Purpose   :
+ Returns   : JSON for filter
+ Argument  : type - string ('and','or',etc)
+             hash of one or more filters
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub build_filters_filter {
+	my $type = shift;
+	my $filters = shift;
+	my $json = '{"' . $type . '":[';
 	my $first = 1;
-	for my $term (@_) {
+	for my $key (keys %$filters) {
 		if ($first) {
 			$first = 0;
 		} else {
 			$json .= ',';
 		}
-		$json .= '"' . $term . '"'; # note: doesn't yet encode values
+		$json .= build_filter($key, $filters->{$key});
 	}
-	$json .= ']}}';
-	return $json;
+	return $json .= ']}';
 }
 
 ################################################ subroutine header begin ##
