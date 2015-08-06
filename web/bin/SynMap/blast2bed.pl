@@ -44,8 +44,8 @@ foreach my $item (@$input)
 	next;
       }
 
-    my @item1 = split/\|\|/, $line[0];
-    my @item2 = split/\|\|/, $line[1];
+    my @item1 = split(/\|\|/, $line[0]);
+    my @item2 = split(/\|\|/, $line[1]);
     unless (defined $item1[0] && defined $item1[1] && defined $item1[2])
       {
 	print STDERR "Skipping printing output because of missing values:\n";
@@ -82,9 +82,9 @@ sub convert_blast_genomic_names
     my @output;
     foreach my $item (@$data)
       {
-	my @line = split/\t/, $item;
-	my @item1 = split/\|\|/, $line[0];
-	my @item2 = split/\|\|/, $line[1];
+	my @line = split(/\t/, $item);
+	my @item1 = split(/\|\|/, $line[0]);
+	my @item2 = split(/\|\|/, $line[1]);
 	#add start and stop positions to items if not present (e.g. genomci sequence hits)
 	my ($ori1, $ori2); #strand/orientation of features/hits
 	$ori1 = $item1[4];
