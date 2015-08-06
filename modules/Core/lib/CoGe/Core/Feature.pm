@@ -67,7 +67,7 @@ sub strand {
 
 sub dataset_id {
     my $self = shift;
-    return $self->{dataset_id};
+    return $self->{dataset};
 }
 
 ################################################ subroutine header begin ##
