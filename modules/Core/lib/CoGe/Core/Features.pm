@@ -2,7 +2,7 @@ package CoGe::Core::Features;
 
 BEGIN {
 	use Exporter 'import';
-	our @EXPORT_OK = qw( get_chromosome_count get_feature get_features get_features_ids get_features_in_region get_total_chromosomes_length get_type_counts );
+	our @EXPORT_OK = qw( get_chromosome_count get_chromosomes get_feature get_features get_features_ids get_features_in_region get_total_chromosomes_length get_type_counts );
 }
 
 =head1 NAME
@@ -92,73 +92,63 @@ sub copy_rows {
 	my $dbh = shift;
 	my $index = shift || 'coge'; # optional index name
 	my $e = Search::Elasticsearch->new();
-	my $json_xs = JSON::XS->new->allow_nonref;
 	
     while (my $feature = $features->fetchrow_arrayref) {
     	my $feature_id = $feature->[0];
-    	my $body = { type => $feature->[1], dataset => $feature->[2] };
+    	my $body = { type => int $feature->[1], dataset => int $feature->[2] };
 		if ($feature->[3]) {
-			$body->{start} = $feature->[3];
+			$body->{start} = int $feature->[3];
 		}
 		if ($feature->[4]) {
-			$body->{stop} = $feature->[4];
+			$body->{stop} = int $feature->[4];
 		}
 		if ($feature->[5]) {
-			$body->{strand} = $feature->[5];
+			$body->{strand} = int $feature->[5];
 		}
 		if ($feature->[6]) {
 			$body->{chromosome} = $feature->[6];
 		}
-	    my $names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id=' . $feature_id);
-	    $names->execute;
-		$json .= ',"names":[';
-		my $first = 1;
-	    while (my $name = $names->fetchrow_arrayref) {
-			if ($first) {
-				$first = 0;
-			} else {
-				$json .= ',';
+	    my $db_names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id=' . $feature_id);
+	    $db_names->execute;
+	    my $names;
+	    while (my $db_name = $db_names->fetchrow_arrayref) {
+	    	my $name = { name => $db_name->[0]};
+			if ($db_name->[1]) {
+				$name->{description} = $db_name->[1];
 			}
-			$json .= '{"name":' . $json_xs->encode(encode("UTF-8", $name->[0]));
-			if ($name->[1]) {
-				$json .= ',"description":' . $json_xs->encode(encode("UTF-8", $name->[1]));
+			if ($db_name->[2]) {
+				$name->{primary} = 1;
 			}
-			if ($name->[2]) {
-				$json .= ',"primary":true';
-			};
-			$json .= '}';
+			push @$names, $name;
 		}
-		$json .= '],"locations":[';
-	    my $locations = $dbh->prepare('SELECT start,stop,strand,chromosome FROM location WHERE feature_id=' . $feature_id);
-	    $locations->execute;
-		$first = 1;
-	    while (my $location = $locations->fetchrow_arrayref) {
-			if ($first) {
-				$first = 0;
-			} else {
-				$json .= ',';
-			}
-			$json .= '{"start":' . $location->[0] . ',"stop":' . $location->[1] . ',"strand":' . $location->[2] . ',"chromosome":"' . $location->[3] . '"}';
+		if ($names) {
+			$body->{names} = $names;
 		}
-		$json .= '],"annotations":[';
-	    my $annotations = $dbh->prepare('SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id=' . $feature_id);
-	    $annotations->execute;
-		$first = 1;
-	    while (my $annotation = $annotations->fetchrow_arrayref) {
-			if ($first) {
-				$first = 0;
-			} else {
-				$json .= ',';
-			}
-			$json .= '{"annotation":' . $json_xs->encode(encode("UTF-8", $annotation->[0])) . ',"type":' . $annotation->[1];
-			if ($annotation->[2]) {
-				$json .= ',"link":' . $json_xs->encode(encode("UTF-8", $annotation->[2]));
-			}
-			$json .= '}';
+	    my $db_locations = $dbh->prepare('SELECT start,stop,strand,chromosome FROM location WHERE feature_id=' . $feature_id);
+	    $db_locations->execute;
+	    my $locations;
+	    while (my $db_location = $db_locations->fetchrow_arrayref) {
+			push @$locations, { start => int $db_location->[0], stop => int $db_location->[1], strand => int $db_location->[2], chromosome => $db_location->[3] };
 		}
-		$json .= ']}';
+		if ($locations) {
+			$body->{locations} = $locations;
+		}
+	    my $db_annotations = $dbh->prepare('SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id=' . $feature_id);
+	    $db_annotations->execute;
+	    my $annotations;
+	    while (my $db_annotation = $db_annotations->fetchrow_arrayref) {
+			my $annotation = { annotation => $db_annotation->[0], type => int $db_annotation->[1] };
+			if ($db_annotation->[2]) {
+				$annotation->{link} = $annotation->[2];
+			}
+			push @$annotations, $annotation;
+		}
+		if ($annotations) {
+			$body->{annotations} = $annotations;
+		}
 		print $feature_id . ' ';
-		elasticsearch_post($index . '/features/' . $feature_id, $json);
+		
+		$e->index( index => $index, type => 'features', id => $feature_id, body => $body );
 	}
 }
 
@@ -210,9 +200,9 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_chromosome_count {
-	my %search = @_;
-	$search{type} = 4; # 4 is the feature_type_id for chromosomes
-	return get_features_count(\%search);
+	my $search = shift;
+	$search->{type} = 4; # 4 is the feature_type_id for chromosomes
+	return get_features_count($search);
 }
 
 ################################################ subroutine header begin ##
@@ -233,9 +223,9 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_chromosomes {
-	my %search = @_;
-	$search{type} = 4; # 4 is the feature_type_id for chromosomes
-	return get_features(\%search, shift);
+	my $search = shift;
+	$search->{type} = 4; # 4 is the feature_type_id for chromosomes
+	return get_features($search, shift);
 }
 
 ################################################ subroutine header begin ##
@@ -290,34 +280,32 @@ sub get_features {
 	my $search = shift;
 	my $options = shift;
 	my $index = shift || 'coge'; # optional index name
-	my $data = '{';
-	my $size = 10000000;
-
-	if ($options) {
-		$size = $options->{size} if $options->{size};
-		if ($options->{sort}) {
-			my $sort = encode_json($options->{sort});
-			if (substr($sort, 0, 1) ne '[') {
-				$sort = '[' . $sort . ']';
+	my $body = {
+		query => {
+			filtered => {
+				filter => build_and_filter($search)
 			}
-			$data .= '"sort":' . $sort . ',';
-		}
+		},
+		size => 10000000
+	};
+	if ($options) {
+		$body->{size} = $options->{size} if $options->{size};
+		$body->{sort} = $options->{sort} if $options->{sort};
 	}
-	$data .= '"query":{"filtered":{"filter":' . build_and_filter($search) . '}},"size":' . $size . '}';
-	print STDERR $data, "\n" if $DEBUG;
-	my $json = elasticsearch_post($index . '/features/_search?search_type=scan&scroll=1m', $data);
-	my $o = decode_json($json);
-	$json = elasticsearch_post('_search/scroll?scroll=1m', $o->{_scroll_id});
-	$o = decode_json($json);
+	my $e = Search::Elasticsearch->new();
+	my $results = $e->search(
+		index => 'coge',
+		type => 'features',
+		body => $body
+	);
 	my @hits;
-	if (@hits) {
-		foreach (@{$o->{hits}->{hits}}) {
-			my $feature = $_->{_source};
-			$feature->{id} = $_->{_id};
-			push(@hits, bless($feature, 'CoGe::Core::Feature'));
-		}
-	} else {
-		print STDERR 'no hits for query: ' . $data . "\n";
+	foreach (@{$results->{hits}->{hits}}) {
+		my $feature = $_->{_source};
+		$feature->{id} = $_->{_id};
+		push(@hits, bless($feature, 'CoGe::Core::Feature'));
+	}
+	if (!@hits) {
+		print STDERR 'no hits for query: ' . Dumper \$body;
 	}
 	return wantarray ? @hits : \@hits;
 }
@@ -370,9 +358,18 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_features_count {
-	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_and_filter(shift) . '}}}');
-	my $o = decode_json($json);
-	return $o->{hits}->{total};
+	my $e = Search::Elasticsearch->new();
+	return $e->count(
+		index => 'coge',
+		type => 'features',
+		body => {
+			query => {
+				filtered => {
+					filter => build_and_filter(shift)
+				}
+			}
+		}
+	)->{count};
 }
 
 ################################################ subroutine header begin ##
@@ -629,10 +626,31 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_total_chromosomes_length {
-	my $search = { dataset => shift, type => 4 }; # 4 is feature_type_id of chromosomes
-	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_and_filter($search) . '}},"aggs":{"length":{"sum":{"field":"stop"}}}}');
-	my $o = decode_json($json);
-	return $o->{aggregations}->{length}->{value};
+	my $e = Search::Elasticsearch->new();
+	my $results = $e->search(
+		index => 'coge',
+		type => 'features',
+		body => {
+			query => {
+				filtered => {
+					filter => {
+						and => [
+							{ term => { dataset => shift } },
+							{ term => { type => 4 } } # 4 is feature_type_id of chromosomes
+						]
+					}
+				}
+			},
+			aggs => {
+				length => {
+					sum => {
+						field => 'stop'
+					}
+				}
+			}
+		}
+	);
+	return $results->{aggregations}->{length}->{value};
 }
 
 ################################################ subroutine header begin ##
@@ -653,10 +671,28 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_type_counts {
-	my $json = elasticsearch_post('coge/features/_search?search_type=count','{"query":{"filtered":{"filter":' . build_filter('dataset' => shift) . '}},"aggs":{"count":{"terms":{"field":"type"}}}}');
-	my $o = decode_json($json);
+	my $e = Search::Elasticsearch->new();
+	my $results = $e->search(
+		index => 'coge',
+		type => 'features',
+		search_type => 'count',
+		body => {
+			query => {
+				filtered => {
+					filter => build_filter('dataset', shift)
+				}
+			},
+			aggs => {
+				count => {
+					terms => {
+						field => 'type'
+					}
+				}
+			}
+		}
+	);
 	my %counts;
-	foreach (@{$o->{aggregations}->{count}->{buckets}}) {
+	foreach (@{$results->{aggregations}->{count}->{buckets}}) {
 		$counts{$_->{key}} = $_->{doc_count};
 	}
 	return %counts;

@@ -105,7 +105,7 @@ sub gen_html {
       ) #there can be additional information about a chromosome for a particular version of the organism that is not in the same data_information.  Let's go find the organism_id and version for the specified data information item.
     {
         $version = $ds->version unless $version;
-        ($chr) = $ds->get_chromosomes() unless $chr;
+        ($chr) = $ds->chromosomes() unless $chr;
     }
     if ($dsg) {
         $version = $dsg->version unless $version;

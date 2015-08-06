@@ -50,48 +50,26 @@ sub build_filter {
 	my $field = shift;
 	my $value = shift;
 	if (ref($value) eq 'ARRAY') {
-		my @terms = $value;
-		if (scalar @terms == 1) {
-			return '{"term":{"' . $field . '":"' . @terms[0] . '"}}';
+		if (scalar @{$value} == 1) {
+			return { term => { $field => $value->[0] } };
 		}
-		my $json = '{"terms":{"' . $field . '":[';
-		my $first = 1;
-		for my $term (@terms) {
-			if ($first) {
-				$first = 0;
-			} else {
-				$json .= ',';
-			}
-			$json .= '"' . $term . '"'; # note: doesn't yet encode values
-		}
-		$json .= ']}}';
-		return $json;
+		return { terms => { $field => $value } };
 	}
 	if (ref($value) eq 'HASH') {
-		my $json = '{"range":{"' . $field . '":{';
-		my $first = 1;
-		for my $op (keys %$value) {
-			if ($first) {
-				$first = 0;
-			} else {
-				$json .= ',';
-			}
-			$json .= '"' . $op . '":' . $value->{$op};
-		}
-		return $json . '}}}';
+		return { range => { $field => $value}};
+	}
+	if ($field eq 'and') {
+		return build_filters_filter('and', $value);
 	}
 	if ($field eq 'not') {
 		my @keys = keys %$value;
 		my $key = @keys[0];
-		return '{"not":' . build_filter($key, $value->{$key}) . '}';
+		return {not => build_filter($key, $value->{$key}) };
 	}
-	if ($field eq '-and') {
-		return build_filters_filter('and', $value);
-	}
-	if ($field eq '-or') {
+	if ($field eq 'or') {
 		return build_filters_filter('or', $value);
 	}
-	return '{"term":{"' . $field . '":"' . $value . '"}}';
+	return { term => { $field => $value } };
 }
 
 ################################################ subroutine header begin ##
@@ -115,17 +93,12 @@ See Also   :
 sub build_filters_filter {
 	my $type = shift;
 	my $filters = shift;
+	my $array;
 	my $json = '{"' . $type . '":[';
-	my $first = 1;
 	for my $key (keys %$filters) {
-		if ($first) {
-			$first = 0;
-		} else {
-			$json .= ',';
-		}
-		$json .= build_filter($key, $filters->{$key});
+		push @$array, build_filter($key, $filters->{$key});
 	}
-	return $json .= ']}';
+	return { $type => $array };
 }
 
 ################################################ subroutine header begin ##

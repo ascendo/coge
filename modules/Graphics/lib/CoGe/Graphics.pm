@@ -205,14 +205,14 @@ sub genomic_view
 	{
 		($org) = $ds->organism unless $org;
 		$version = $ds->version unless $version;
-		($chr) = $ds->get_chromosomes() unless $chr;
+		($chr) = $ds->chromosomes unless $chr;
 	}
 
 	if ( $org && !$ds )
 	{
 		($ds) = $org->current_datasets();
 		$version = $ds->version;
-		($chr) = $ds->get_chromosomes() unless $chr;
+		($chr) = $ds->chromosomes unless $chr;
 	}
 
 	unless ( defined $start && $chr && ($ds || $dsg) )

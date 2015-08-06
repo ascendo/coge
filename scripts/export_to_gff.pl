@@ -62,7 +62,7 @@ sub get_locs {
     my %chrs;
     foreach my $ds (@$datasets) {
         my $dso = $coge->resultset('Dataset')->resolve($ds);
-        foreach my $chr ( $dso->get_chromosomes ) {
+        foreach my $chr ( $dso->chromosomes ) {
             $chrs{$chr} = $dso->last_chromosome_position($chr);
         }
     }
@@ -233,7 +233,7 @@ sub get_sequence {
     foreach my $ds (@$datasets) {
         my $ds = $coge->resultset('Dataset')->resolve($ds);
         my %seen;
-        foreach my $chr ( $ds->get_chromosomes ) {
+        foreach my $chr ( $ds->chromosomes ) {
 
             # TODO: this will break with contigs.
             next if $chr =~ /random/;

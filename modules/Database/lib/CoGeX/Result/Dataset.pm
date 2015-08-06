@@ -6,7 +6,7 @@ use Data::Dumper;
 use POSIX;
 use Carp qw (cluck);
 use CoGe::Core::Feature;
-use CoGe::Core::Features qw( get_chromosome_count get_features get_total_chromosomes_length );
+use CoGe::Core::Features qw( get_chromosome_count get_chromosomes get_features get_total_chromosomes_length );
 use CoGe::Core::Storage qw( reverse_complement );
 
 use base 'DBIx::Class::Core';
@@ -475,7 +475,7 @@ See Also   :
 
 sub chromosome_count {
     my $self = shift;
-    return get_chromosome_count(dataset => $self->id);
+    return get_chromosome_count({dataset => $self->id});
 #    my %opts = @_;
 #    my $ftid = $opts{ftid};
 #    my $search;
@@ -527,7 +527,7 @@ sub genomic_sequence_type {
 
 ################################################ subroutine header begin ##
 
-=head2 get_chromosomes
+=head2 chromosomes
 
  Usage     :
  Purpose   :
@@ -542,7 +542,7 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub get_chromosomes {
+sub chromosomes {
     my $self   = shift;
     my %opts   = @_;
 #    my $ftid   = $opts{ftid};   #feature_type_id for feature_type of name "chromosome";
@@ -566,7 +566,7 @@ sub get_chromosomes {
 #    }
     
 #    if ($max && $self->features( $search, $search_type)->count() > $max ) {
-    if ($max && get_chromosome_count(dataset => $self->id) > $max) {
+    if ($max && get_chromosome_count({dataset => $self->id}) > $max) {
         return;
     }
 
@@ -577,7 +577,7 @@ sub get_chromosomes {
     
     if ($length) {
 #        @data = $self->features( $search, $search_type );
-        @data = CoGe::Core::Features::get_chromosomes({dataset => $self->id}, $search_type);
+        @data = get_chromosomes({dataset => $self->id}, $search_type);
     }
     else {
         @data = map { $_->chromosome } $self->features($search, $search_type);
@@ -590,11 +590,6 @@ sub get_chromosomes {
         @data = sort keys %seen;
     }
     return wantarray ? @data : \@data;
-}
-
-sub chromosomes {
-    my $self = shift;
-    $self->get_chromosomes(@_);
 }
 
 ################################################ subroutine header begin ##
@@ -706,7 +701,7 @@ sub fasta {
     $col = $opts{wrap}   unless defined $col;
     $col = 100           unless defined $col;
     my $chr = $opts{chr};
-    ($chr) = $self->get_chromosomes unless defined $chr;
+    ($chr) = $self->chromosomes unless defined $chr;
     my $strand = $opts{strand} || 1;
     my $start  = $opts{start}  || 1;
     $start = 1 if $start < 1;
@@ -822,7 +817,7 @@ sub gff {
     # Generate GFF header
     my @chrs;
     my %chrs;
-    foreach my $chr ( $ds->get_chromosomes ) {
+    foreach my $chr ( $ds->chromosomes ) {
         $chrs{$chr} = $ds->last_chromosome_position($chr);
     }
     if ($chromosome) {

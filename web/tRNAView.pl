@@ -476,7 +476,7 @@ sub get_genome_fasta {
             push @chrs,
               join( ", ",
                 map { "chr:" . $_ . " v:" . $ds->version . " ds:" . $ds->id }
-                  $ds->get_chromosomes );
+                  $ds->chromosomes );
         }
         $title .= join( ", ", @chrs );
     }
@@ -511,7 +511,7 @@ sub generate_fasta {
     open( OUT, ">$file" ) || die "Can't open $file for writing: $!";
     foreach my $ds (@$dslist) {
         next unless $USER->has_access_to_dataset($ds);
-        foreach my $chr ( sort $ds->get_chromosomes ) {
+        foreach my $chr ( sort $ds->chromosomes ) {
             my $title =
                 $ds->organism->name . " (v"
               . $ds->version . ") "

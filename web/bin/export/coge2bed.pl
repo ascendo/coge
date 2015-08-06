@@ -131,7 +131,7 @@ sub get_locs {
     my %chrs;
     foreach my $ds (@$datasets) {
         my $dso = $coge->resultset('Dataset')->resolve($ds);
-        foreach my $chr ( $dso->get_chromosomes ) {
+        foreach my $chr ( $dso->chromosomes ) {
             $chrs{$chr} = $dso->last_chromosome_position($chr);
         }
     }

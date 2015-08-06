@@ -731,7 +731,7 @@ sub get_dataset_info {
     my $chr_num = $ds->chromosome_count;
     my %chr;
     my $tmp_count = 0;
-    foreach my $c ( $ds->get_chromosomes( length => 1, limit => $MAX_NUM_CHROMOSOME_RESULTS, max => 1000 ) ) {
+    foreach my $c ( $ds->chromosomes( length => 1, limit => $MAX_NUM_CHROMOSOME_RESULTS, max => 1000 ) ) {
 #        if (ref($c) =~ /CoGeX/ )
         if (ref($c) =~ /CoGe::Core::Feature/ )
          { $chr{$c->chromosome} = { length => $c->stop }; }
@@ -1849,7 +1849,7 @@ sub get_total_length_for_ds {
     my $dsid   = $opts{dsid};
     my $ds     = $coge->resultset('Dataset')->find($dsid);
 #    my $length = 0;
-#    map { $length += $ds->last_chromosome_position($_) } $ds->get_chromosomes();
+#    map { $length += $ds->last_chromosome_position($_) } $ds->chromosomes();
 #    return commify($length);
 	return commify($ds->total_length);
 }

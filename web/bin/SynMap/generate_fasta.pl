@@ -76,7 +76,7 @@ sub gen_fasta {
     if ( $feature_type eq "CDS" || $feature_type eq "protein" ) {
         my $count = 1;
         my $t1 = new Benchmark if $debug;
-        my %chr_sequence; # = map{$_=>$genome->get_genomic_sequence(chr=>$_)} $genome->get_chromosomes;
+        my %chr_sequence; # = map{$_=>$genome->get_genomic_sequence(chr=>$_)} $genome->chromosomes;
         my $t2 = new Benchmark if $debug;
         my $d0 = timestr( timediff( $t2, $t1 ) ) if $debug;
         say STDERR "Populate genomic sequence time: $d0" if $debug;
@@ -213,7 +213,7 @@ sub gen_fasta {
         }
     }
     else {
-        my @chr = sort $genome->get_chromosomes;
+        my @chr = sort $genome->chromosomes;
         CoGe::Accessory::Web::write_log(
             "Getting sequence for "
               . scalar(@chr)
