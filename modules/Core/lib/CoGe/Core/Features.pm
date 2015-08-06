@@ -294,7 +294,7 @@ sub get_features {
 	}
 	my $e = Search::Elasticsearch->new();
 	my $results = $e->search(
-		index => 'coge',
+		index => $index,
 		type => 'features',
 		body => $body
 	);
