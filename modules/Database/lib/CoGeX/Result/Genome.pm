@@ -327,6 +327,12 @@ sub first_dataset {
     }
 }
 
+sub dataset_ids {
+    my $self = shift;
+    my @dataset_ids = map { $_->id } $self->datasets;
+    return wantarray ? @dataset_ids : \@dataset_ids;
+}
+
 ################################################ subroutine header begin ##
 #
 #=head2 owner
