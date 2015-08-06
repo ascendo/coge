@@ -273,19 +273,21 @@ sub search {
         warn "Elasticsearch::search: ERROR: invalid query:\n", Dumper $query;
         return;
     }
+    warn Dumper $dsl if $DEBUG;
     
     # Execute query
     my $es = Search::Elasticsearch->new(nodes => $url);
     my $results = $es->search(
         index  => $index,
         type   => $type,
-        scroll => '1m', #FIXME is this correct/necessary?
+        size   => 1000*1000, #FIXME magic number
         body   => $dsl
     );
     unless ($results) {
         warn 'Elasticsearch::search: ERROR: null results';
         return;
-    }    
+    }
+    #warn Dumper $results if $DEBUG;
     
     # Format results
     my @results;
