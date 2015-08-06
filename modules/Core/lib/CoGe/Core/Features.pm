@@ -304,7 +304,7 @@ sub get_features {
 		$feature->{id} = $_->{_id};
 		push(@hits, bless($feature, 'CoGe::Core::Feature'));
 	}
-	if (!@hits) {
+	if (!@hits && $DEBUG) {
 		print STDERR 'no hits for query: ' . Dumper \$body;
 	}
 	return wantarray ? @hits : \@hits;
