@@ -695,7 +695,8 @@ sub get_type_counts {
 	foreach (@{$results->{aggregations}->{count}->{buckets}}) {
 		$counts{$_->{key}} = $_->{doc_count};
 	}
-	return %counts;
+	
+	return \%counts;
 }
 
 1;
