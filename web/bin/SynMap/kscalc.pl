@@ -95,7 +95,7 @@ sub batch_add {
     my $buffer = $opts{buffer};
     my $handle = $opts{handle};
     my $size = $opts{size};
-    $size //= 10000;
+    $size //= 10000; #/
     my $row = $opts{row};
     my $result;
 
