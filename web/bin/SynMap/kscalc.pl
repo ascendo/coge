@@ -169,12 +169,11 @@ DNA_align_2
     my @data;
     my $i  = 0;
     while (<IN>) {
-
         next if /^#/;
         chomp;
-        my @line  = split /\t/;
-        my @item1 = split /\|\|/, $line[1];
-        my @item2 = split /\|\|/, $line[5];
+        my @line  = split(/\t/);
+        my @item1 = split(/\|\|/, $line[1]);
+        my @item2 = split(/\|\|/, $line[5]);
         unless ( $item1[6] && $item2[6] ) {
             warn "Line does not appear to contain coge feature ids:  $_\n";
             next;
@@ -405,9 +404,9 @@ sub process_block {
     my @ks;
     my @kn;
     foreach my $item (@$block) {
-        my @line = split /\t/,   $item;
-        my @seq1 = split /\|\|/, $line[1];
-        my @seq2 = split /\|\|/, $line[5];
+        my @line = split(/\t/,   $item);
+        my @seq1 = split(/\|\|/, $line[1]);
+        my @seq2 = split(/\|\|/, $line[5]);
         my $ks   = $ksdata->{ $seq1[6] }{ $seq2[6] };
         if ( defined $ks->{dS} ) {
             unshift @line, $ks->{dN};
