@@ -71,7 +71,7 @@ sub build_filter {
 	}
 	if ($field eq 'not') {
 		my @keys = keys %$value;
-		my $key = @keys[0];
+		my $key = $keys[0];
 		return {not => build_filter($key, $value->{$key}) };
 	}
 	if ($field eq 'or') {
@@ -279,7 +279,7 @@ sub search {
     my $results = $es->search(
         index  => $index,
         type   => $type,
-        scroll => '1m',
+        scroll => '1m', #FIXME is this correct/necessary?
         body   => $dsl
     );
     unless ($results) {
