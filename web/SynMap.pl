@@ -8,8 +8,9 @@ use CoGeX;
 use CoGe::Accessory::Jex;
 use CoGe::Accessory::Workflow;
 use CoGe::Accessory::Web qw(url_for);
-use CoGe::Accessory::Utils qw( commify );
+use CoGe::Accessory::Utils qw(commify);
 use CoGe::Builder::Tools::SynMap qw(generate_pseudo_assembly);
+use CoGe::Core::Features qw(get_feature get_type_counts);
 use CGI;
 use CGI::Carp 'fatalsToBrowser';
 use CGI::Ajax;
@@ -618,28 +619,30 @@ sub gen_dsg_menu {
             $name .= $dsg->name . ": " if $dsg->name;
             $name .= $dsg->type->name . " (v" . $dsg->version . ",id" . $dsg->id . ")";
             $org_name = $dsg->organism->name unless $org_name;
-            foreach my $ft (
-                $coge->resultset('FeatureType')->search(
-                    {
-                        genome_id            => $dsg->id,
-                        'me.feature_type_id' => 3
-                    },
-                    {
-                        join =>
-                          { features => { dataset => 'dataset_connectors' } },
-                        rows => 1,
-                    }
-                )
-              )
-            {
-                $has_cds = 1;
-            }
+#            foreach my $ft (
+#                $coge->resultset('FeatureType')->search(
+#                    {
+#                        genome_id            => $dsg->id,
+#                        'me.feature_type_id' => 3
+#                    },
+#                    {
+#                        join =>
+#                          { features => { dataset => 'dataset_connectors' } },
+#                        rows => 1,
+#                    }
+#                )
+#              )
+#            {
+#                $has_cds = 1;
+#            }
+            my $type_counts = get_type_counts([ map { $_->id } $dsg->datasets ], 'matt');
+            $has_cds = 1 if (defined $type_counts && $type_counts->{3});
         }
 
         push @dsg_menu, [ $dsg->id, $name, $dsg, $has_cds ];
     }
 
-    return ( qq{<span id="dsgid$num" class="hidden"></span>}, '') unless (@dsg_menu);
+    return (qq{<span id="dsgid$num" class="hidden"></span>}, '') unless @dsg_menu;
 
     #my $dsg_menu = qq{<select id="dsgid$num" onChange="\$('#dsg_info$num').html('<div class=dna_small class="loading" class="small">loading. . .</div>'); get_genome_info(['args__dsgid','dsgid$num','args__org_num','args__$num'],[handle_dsg_info])">};
     my $dsg_menu =
@@ -694,7 +697,7 @@ sub get_orgs {
     my $org_count;
 
     # Create terms for search
-    my @terms = split /\s+/, $search if defined $search;
+    my @terms = split(/\s+/, $search) if defined $search;
 
     if (scalar @terms or $oid)  {
         my @constraints = map {
@@ -805,31 +808,31 @@ sub get_genome_info {
     if ( $dsg->restricted && !$USER->has_access_to_genome($dsg) ) {
         $html_dsg_info = "Restricted";
     }
-    if ($dsg->deleted)
-      {
-    $html_dsg_info = "<span class='alert'>This genome has been deleted and cannot be used in this analysis.</span>  <a href='GenomeInfo.pl?gid=$dsgid' target=_new>More information</a>.";
-      }
+    if ($dsg->deleted) {
+        $html_dsg_info = "<span class='alert'>This genome has been deleted and cannot be used in this analysis.</span>  <a href='GenomeInfo.pl?gid=$dsgid' target=_new>More information</a>.";
+    }
 
     my $message;
 
     #create feature type menu
-    my $has_cds;
-
-    foreach my $ft (
-        $coge->resultset('FeatureType')->search(
-            {
-                genome_id            => $dsg->id,
-                'me.feature_type_id' => 3
-            },
-            {
-                join => { features => { dataset => 'dataset_connectors' } },
-                rows => 1,
-            }
-        )
-      )
-    {
-        $has_cds = 1;
-    }
+    my $has_cds = 0;
+#    foreach my $ft (
+#        $coge->resultset('FeatureType')->search(
+#            {
+#                genome_id            => $dsg->id,
+#                'me.feature_type_id' => 3
+#            },
+#            {
+#                join => { features => { dataset => 'dataset_connectors' } },
+#                rows => 1,
+#            }
+#        )
+#      )
+#    {
+#        $has_cds = 1;
+#    }
+    my $type_counts = get_type_counts([ map { $_->id } $dsg->datasets ], 'matt');
+    $has_cds = 1 if (defined $type_counts && $type_counts->{3});
 
     my ( $cds_selected, $genomic_selected ) = ( " ", " " );
     $cds_selected     = "selected" if $feattype eq 1 || $feattype eq "CDS";
@@ -846,186 +849,186 @@ sub get_genome_info {
       $dsg->organism->name, $dsg->genomic_sequence_type_id;
 }
 
-sub get_previous_analyses {
-
-    #FIXME:  THis whole sub needs updating or removal!  Lyons 6/12/13
-    my %opts = @_;
-    my $oid1 = $opts{oid1};
-    my $oid2 = $opts{oid2};
-    return unless $oid1 && $oid2;
-    my ($org1) = $coge->resultset('Organism')->find($oid1);
-    my ($org2) = $coge->resultset('Organism')->find($oid2);
-    return
-      if ( $USER->user_name =~ /public/i
-        && ( $org1->restricted || $org2->restricted ) );
-    my ($org_name1) = $org1->name;
-    my ($org_name2) = $org2->name;
-    ( $oid1, $org_name1, $oid2, $org_name2 ) =
-      ( $oid2, $org_name2, $oid1, $org_name1 )
-      if ( $org_name2 lt $org_name1 );
-
-    my $tmp1 = $org_name1;
-    my $tmp2 = $org_name2;
-    foreach my $tmp ( $tmp1, $tmp2 ) {
-        $tmp =~ s/\///g;
-        $tmp =~ s/\s+/_/g;
-        $tmp =~ s/\(//g;
-        $tmp =~ s/\)//g;
-        $tmp =~ s/://g;
-        $tmp =~ s/;//g;
-        $tmp =~ s/#/_/g;
-        $tmp =~ s/'//g;
-        $tmp =~ s/"//g;
-    }
-
-    my $dir = $tmp1 . "/" . $tmp2;
-    $dir = "$DIAGSDIR/" . $dir;
-    my $sqlite = 0;
-    my @items;
-    if ( -d $dir ) {
-        opendir( DIR, $dir );
-        while ( my $file = readdir(DIR) ) {
-            $sqlite = 1 if $file =~ /sqlite$/;
-            next unless $file =~ /\.aligncoords/;    #$/\.merge$/;
-            my ( $D, $g, $A ) = $file =~ /D(\d+)_g(\d+)_A(\d+)/;
-            my ($Dm) = $file =~ /Dm(\d+)/;
-            my ($gm) = $file =~ /gm(\d+)/;
-            my ($ma) = $file =~ /ma(\d+)/;
-            $Dm = " " unless defined $Dm;
-            $gm = " " unless defined $gm;
-            $ma = 0   unless $ma;
-            my $merge_algo;
-            $merge_algo = "DAGChainer" if $ma && $ma == 2;
-
-            if ( $ma && $ma == 1 ) {
-                $merge_algo = "Quota Align";
-                $gm         = " ";
-            }
-            unless ($ma) {
-                $merge_algo = "--none--";
-                $gm         = " ";
-                $Dm         = " ";
-            }
-
-            #       $Dm = 0 unless $Dm;
-            #       $gm = 0 unless $gm;
-            next unless ( $D && $g && $A );
-
-            my ($blast) = $file =~
-              /^[^\.]+\.[^\.]+\.([^\.]+)/;    #/blastn/ ? "BlastN" : "TBlastX";
-            my $select_val;
-            foreach my $item ( values %$ALGO_LOOKUP ) {
-                if ( $item->{filename} eq $blast ) {
-                    $blast      = $item->{displayname};
-                    $select_val = $item->{html_select_val};
-                }
-            }
-            my ( $dsgid1, $dsgid2, $type1, $type2 ) =
-              $file =~ /^(\d+)_(\d+)\.(\w+)-(\w+)/;
-            $type1 = "CDS" if $type1 eq "protein";
-            $type2 = "CDS" if $type2 eq "protein";
-
-            #           print STDERR $file,"\n";
-            #           my ($repeat_filter) = $file =~ /_c(\d+)/;
-            next unless ( $dsgid1 && $dsgid2 && $type1 && $type2 );
-            my ($dupdist) = $file =~ /tdd(\d+)/;
-            my %data = (
-
-           #                                    repeat_filter => $repeat_filter,
-                tdd        => $dupdist,
-                D          => $D,
-                g          => $g,
-                A          => $A,
-                Dm         => $Dm,
-                gm         => $gm,
-                ma         => $ma,
-                merge_algo => $merge_algo,
-                blast      => $blast,
-                dsgid1     => $dsgid1,
-                dsgid2     => $dsgid2,
-                select_val => $select_val
-            );
-            my $geneorder = $file =~ /\.go/;
-            my $genome1 = $coge->resultset('Genome')->find($dsgid1);
-            next unless $genome1;
-            next
-              if ( $genome1->restricted && !$USER->has_access_to_genome($genome1) );
-            my ($ds1) = $genome1->datasets;
-            my $genome2 = $coge->resultset('Genome')->find($dsgid2);
-            next unless $genome2;
-            next
-              if ( $genome2->restricted && !$USER->has_access_to_genome($genome2) );
-            my ($ds2) = $genome2->datasets;
-            $data{dsg1} = $genome1;
-            $data{dsg2} = $genome2;
-            $data{ds1}  = $ds1;
-            $data{ds2}  = $ds2;
-            
-            $genome1 .= $genome1->name if $genome1->name;
-            $genome1 .= ": "        if $genome1;
-            $genome1 .= $ds1->data_source->name;
-            $genome2 .= $genome2->name if $genome2->name;
-            $genome2 .= ": "        if $genome2;
-            $genome2 .= $ds2->data_source->name;
-            $data{genome1}    = $genome1;
-            $data{genome2}    = $genome2;
-            $data{type_name1} = $type1;
-            $data{type_name2} = $type2;
-            $type1 = $type1 eq "CDS" ? 1 : 2;
-            $type2 = $type2 eq "CDS" ? 1 : 2;
-            $data{type1}   = $type1;
-            $data{type2}   = $type2;
-            $data{dagtype} = $geneorder ? "Ordered genes" : "Distance";
-            push @items, \%data;
-        }
-        closedir(DIR);
-    }
-    return unless @items;
-    my $size = scalar @items;
-    $size = 8 if $size > 8;
-    my $html;
-    my $prev_table = qq{<table id=prev_table class="small resultborder">};
-    $prev_table .= qq{<THEAD><TR><TH>}
-      . join( "<TH>",
-        qw(Org1 Genome1 Ver1 Genome%20Type1 Sequence%20Type1 Org2 Genome2 Ver2 Genome%20Type2 Sequence%20type2 Algo Dist%20Type Dup%20Dist Ave%20Dist(g) Max%20Dist(D) Min%20Pairs(A))
-      ) . "</THEAD><TBODY>\n";
-    my %seen;
-
-    foreach my $item (
-        sort { $b->{dsgid1} <=> $a->{dsgid1} || $b->{dsgid2} <=> $a->{dsgid2} }
-        @items )
-    {
-        my $val = join( "_",
-            $item->{g},          $item->{D},       $item->{A},
-            $oid1,               $item->{dsgid1},  $item->{type1},
-            $oid2,               $item->{dsgid2},  $item->{type2},
-            $item->{select_val}, $item->{dagtype}, $item->{tdd} );
-        next if $seen{$val};
-        $seen{$val} = 1;
-        $prev_table .=
-          qq{<TR class=feat onclick="update_params('$val')" align=center><td>};
-        my $ver1 = $item->{dsg1}->version;
-        $ver1 = "0" . $ver1 if $ver1 =~ /^\./;
-        my $ver2 = $item->{dsg2}->version;
-        $ver2 = "0" . $ver2 if $ver2 =~ /^\./;
-        $prev_table .= join( "<td>",
-            $item->{dsg1}->organism->name, $item->{genome1},
-            $ver1,                         $item->{dsg1}->type->name,
-            $item->{type_name1},           $item->{dsg2}->organism->name,
-            $item->{genome2},              $ver2,
-            $item->{dsg2}->type->name,     $item->{type_name2},
-            $item->{blast},                $item->{dagtype},
-            $item->{tdd},                  $item->{g},
-            $item->{D},                    $item->{A} )
-          . "\n";
-    }
-    $prev_table .= qq{</TBODY></table>};
-    $html .= $prev_table;
-    $html .=
-"<br><span class=small>Synonymous substitution rates previously calculated</span>"
-      if $sqlite;
-    return "$html";
-}
+# mdb removed 8/5/15 - not used anywhere
+#sub get_previous_analyses {
+#    #FIXME:  THis whole sub needs updating or removal!  Lyons 6/12/13
+#    my %opts = @_;
+#    my $oid1 = $opts{oid1};
+#    my $oid2 = $opts{oid2};
+#    return unless $oid1 && $oid2;
+#    my ($org1) = $coge->resultset('Organism')->find($oid1);
+#    my ($org2) = $coge->resultset('Organism')->find($oid2);
+#    return
+#      if ( $USER->user_name =~ /public/i
+#        && ( $org1->restricted || $org2->restricted ) );
+#    my ($org_name1) = $org1->name;
+#    my ($org_name2) = $org2->name;
+#    ( $oid1, $org_name1, $oid2, $org_name2 ) =
+#      ( $oid2, $org_name2, $oid1, $org_name1 )
+#      if ( $org_name2 lt $org_name1 );
+#
+#    my $tmp1 = $org_name1;
+#    my $tmp2 = $org_name2;
+#    foreach my $tmp ( $tmp1, $tmp2 ) {
+#        $tmp =~ s/\///g;
+#        $tmp =~ s/\s+/_/g;
+#        $tmp =~ s/\(//g;
+#        $tmp =~ s/\)//g;
+#        $tmp =~ s/://g;
+#        $tmp =~ s/;//g;
+#        $tmp =~ s/#/_/g;
+#        $tmp =~ s/'//g;
+#        $tmp =~ s/"//g;
+#    }
+#
+#    my $dir = $tmp1 . "/" . $tmp2;
+#    $dir = "$DIAGSDIR/" . $dir;
+#    my $sqlite = 0;
+#    my @items;
+#    if ( -d $dir ) {
+#        opendir( DIR, $dir );
+#        while ( my $file = readdir(DIR) ) {
+#            $sqlite = 1 if $file =~ /sqlite$/;
+#            next unless $file =~ /\.aligncoords/;    #$/\.merge$/;
+#            my ( $D, $g, $A ) = $file =~ /D(\d+)_g(\d+)_A(\d+)/;
+#            my ($Dm) = $file =~ /Dm(\d+)/;
+#            my ($gm) = $file =~ /gm(\d+)/;
+#            my ($ma) = $file =~ /ma(\d+)/;
+#            $Dm = " " unless defined $Dm;
+#            $gm = " " unless defined $gm;
+#            $ma = 0   unless $ma;
+#            my $merge_algo;
+#            $merge_algo = "DAGChainer" if $ma && $ma == 2;
+#
+#            if ( $ma && $ma == 1 ) {
+#                $merge_algo = "Quota Align";
+#                $gm         = " ";
+#            }
+#            unless ($ma) {
+#                $merge_algo = "--none--";
+#                $gm         = " ";
+#                $Dm         = " ";
+#            }
+#
+#            #       $Dm = 0 unless $Dm;
+#            #       $gm = 0 unless $gm;
+#            next unless ( $D && $g && $A );
+#
+#            my ($blast) = $file =~
+#              /^[^\.]+\.[^\.]+\.([^\.]+)/;    #/blastn/ ? "BlastN" : "TBlastX";
+#            my $select_val;
+#            foreach my $item ( values %$ALGO_LOOKUP ) {
+#                if ( $item->{filename} eq $blast ) {
+#                    $blast      = $item->{displayname};
+#                    $select_val = $item->{html_select_val};
+#                }
+#            }
+#            my ( $dsgid1, $dsgid2, $type1, $type2 ) =
+#              $file =~ /^(\d+)_(\d+)\.(\w+)-(\w+)/;
+#            $type1 = "CDS" if $type1 eq "protein";
+#            $type2 = "CDS" if $type2 eq "protein";
+#
+#            #           print STDERR $file,"\n";
+#            #           my ($repeat_filter) = $file =~ /_c(\d+)/;
+#            next unless ( $dsgid1 && $dsgid2 && $type1 && $type2 );
+#            my ($dupdist) = $file =~ /tdd(\d+)/;
+#            my %data = (
+#
+#           #                                    repeat_filter => $repeat_filter,
+#                tdd        => $dupdist,
+#                D          => $D,
+#                g          => $g,
+#                A          => $A,
+#                Dm         => $Dm,
+#                gm         => $gm,
+#                ma         => $ma,
+#                merge_algo => $merge_algo,
+#                blast      => $blast,
+#                dsgid1     => $dsgid1,
+#                dsgid2     => $dsgid2,
+#                select_val => $select_val
+#            );
+#            my $geneorder = $file =~ /\.go/;
+#            my $genome1 = $coge->resultset('Genome')->find($dsgid1);
+#            next unless $genome1;
+#            next
+#              if ( $genome1->restricted && !$USER->has_access_to_genome($genome1) );
+#            my ($ds1) = $genome1->datasets;
+#            my $genome2 = $coge->resultset('Genome')->find($dsgid2);
+#            next unless $genome2;
+#            next
+#              if ( $genome2->restricted && !$USER->has_access_to_genome($genome2) );
+#            my ($ds2) = $genome2->datasets;
+#            $data{dsg1} = $genome1;
+#            $data{dsg2} = $genome2;
+#            $data{ds1}  = $ds1;
+#            $data{ds2}  = $ds2;
+#            
+#            $genome1 .= $genome1->name if $genome1->name;
+#            $genome1 .= ": "        if $genome1;
+#            $genome1 .= $ds1->data_source->name;
+#            $genome2 .= $genome2->name if $genome2->name;
+#            $genome2 .= ": "        if $genome2;
+#            $genome2 .= $ds2->data_source->name;
+#            $data{genome1}    = $genome1;
+#            $data{genome2}    = $genome2;
+#            $data{type_name1} = $type1;
+#            $data{type_name2} = $type2;
+#            $type1 = $type1 eq "CDS" ? 1 : 2;
+#            $type2 = $type2 eq "CDS" ? 1 : 2;
+#            $data{type1}   = $type1;
+#            $data{type2}   = $type2;
+#            $data{dagtype} = $geneorder ? "Ordered genes" : "Distance";
+#            push @items, \%data;
+#        }
+#        closedir(DIR);
+#    }
+#    return unless @items;
+#    my $size = scalar @items;
+#    $size = 8 if $size > 8;
+#    my $html;
+#    my $prev_table = qq{<table id=prev_table class="small resultborder">};
+#    $prev_table .= qq{<THEAD><TR><TH>}
+#      . join( "<TH>",
+#        qw(Org1 Genome1 Ver1 Genome%20Type1 Sequence%20Type1 Org2 Genome2 Ver2 Genome%20Type2 Sequence%20type2 Algo Dist%20Type Dup%20Dist Ave%20Dist(g) Max%20Dist(D) Min%20Pairs(A))
+#      ) . "</THEAD><TBODY>\n";
+#    my %seen;
+#
+#    foreach my $item (
+#        sort { $b->{dsgid1} <=> $a->{dsgid1} || $b->{dsgid2} <=> $a->{dsgid2} }
+#        @items )
+#    {
+#        my $val = join( "_",
+#            $item->{g},          $item->{D},       $item->{A},
+#            $oid1,               $item->{dsgid1},  $item->{type1},
+#            $oid2,               $item->{dsgid2},  $item->{type2},
+#            $item->{select_val}, $item->{dagtype}, $item->{tdd} );
+#        next if $seen{$val};
+#        $seen{$val} = 1;
+#        $prev_table .=
+#          qq{<TR class=feat onclick="update_params('$val')" align=center><td>};
+#        my $ver1 = $item->{dsg1}->version;
+#        $ver1 = "0" . $ver1 if $ver1 =~ /^\./;
+#        my $ver2 = $item->{dsg2}->version;
+#        $ver2 = "0" . $ver2 if $ver2 =~ /^\./;
+#        $prev_table .= join( "<td>",
+#            $item->{dsg1}->organism->name, $item->{genome1},
+#            $ver1,                         $item->{dsg1}->type->name,
+#            $item->{type_name1},           $item->{dsg2}->organism->name,
+#            $item->{genome2},              $ver2,
+#            $item->{dsg2}->type->name,     $item->{type_name2},
+#            $item->{blast},                $item->{dagtype},
+#            $item->{tdd},                  $item->{g},
+#            $item->{D},                    $item->{A} )
+#          . "\n";
+#    }
+#    $prev_table .= qq{</TBODY></table>};
+#    $html .= $prev_table;
+#    $html .=
+#"<br><span class=small>Synonymous substitution rates previously calculated</span>"
+#      if $sqlite;
+#    return "$html";
+#}
 
 sub get_dsg_info {
     my $dsg       = shift;
@@ -1089,14 +1092,8 @@ sub get_pair_info {
             push @anno, $fid . "<br>genomic";
             next;
         }
-        my $feat = $coge->resultset('Feature')->find($fid);
-
-#       my $anno     = "Name: " . join( ", ", map { "<a class=\"data link\" href=\"$URL/FeatView.pl?accn=" . $_ . "\" target=_new>" . $_ . "</a>" } $feat->names );
-#       my $location = "Chr " . $feat->chromosome . " ";
-#       $location .= commify( $feat->start ) . " - " . commify( $feat->stop );
-
-        #   $location .=" (".$feat->strand.")";
-        #       push @anno, $location . "<br>" . $anno;
+        #my $feat = $coge->resultset('Feature')->find($fid);
+        my $feat = get_feature($fid, 'matt');
         push @anno, $feat->annotation_pretty_print_html;
     }
     return unless @anno;
@@ -1113,7 +1110,7 @@ sub get_query_link {
     my %url_options = @_;
     my $dagchainer_D = $url_options{D};
 
- #  my $dagchainer_g = $url_options{g}; #depreciated -- will be a factor of -D
+#   my $dagchainer_g = $url_options{g}; #depreciated -- will be a factor of -D
     my $dagchainer_A = $url_options{A};
     my $Dm           = $url_options{Dm};
     my $gm           = $url_options{gm};
@@ -2088,10 +2085,7 @@ sub go {
         });
 
         CoGe::Accessory::Web::write_log( "", $cogeweb->logfile );
-        CoGe::Accessory::Web::write_log(
-"Added conversion gene order coordinates back to genomic coordinates",
-            $cogeweb->logfile
-        );
+        CoGe::Accessory::Web::write_log( "Added conversion gene order coordinates back to genomic coordinates", $cogeweb->logfile );
 
         $final_dagchainer_file = $final_dagchainer_file . ".gcoords";
     }
@@ -2149,10 +2143,7 @@ sub go {
             });
 
             CoGe::Accessory::Web::write_log( "", $cogeweb->logfile );
-            CoGe::Accessory::Web::write_log(
-"Added ($ks_type) calculation of syntenic CDS pairs and color dots",
-                $cogeweb->logfile
-            );
+            CoGe::Accessory::Web::write_log( "Added ($ks_type) calculation of syntenic CDS pairs and color dots", $cogeweb->logfile );
 
             ####################################################################
             # Generate svg dotplot

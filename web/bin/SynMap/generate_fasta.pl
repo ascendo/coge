@@ -9,11 +9,13 @@ use Carp;
 use DBI;
 use Getopt::Long;
 use Parallel::ForkManager;
+use DBIxProfiler;
+use Data::Dumper;
 
 use CoGeX;
 use CoGe::Accessory::LogUser;
 use CoGe::Accessory::Web;
-use DBIxProfiler;
+use CoGe::Core::Features qw(get_features);
 
 $| = 1;
 our (
@@ -32,8 +34,8 @@ GetOptions(
 
 $P = CoGe::Accessory::Web::get_defaults($CONFIG);
 $ENV{PATH} = join(":",
-  ( $P->{COGEDIR}, $P->{BINDIR}, $P->{BINDIR} . "SynMap",
-    "/usr/bin", "/usr/local/bin" )
+    $P->{COGEDIR}, $P->{BINDIR}, $P->{BINDIR} . "SynMap",
+    "/usr/bin", "/usr/local/bin"
 );
 $TEMPDIR = $P->{TEMPDIR} . "SynMap";
 $NWALIGN = $P->{NWALIGN};
@@ -63,13 +65,9 @@ sub gen_fasta {
     my $gid          = $opts{gid};
     my $feature_type = $opts{feature_type};
     my $file         = $opts{fasta};
-    my ($genome)     =
-#      $coge->resultset('Genome')->search( { "me.genome_id" => $gid },
-#        { join => 'genomic_sequences', prefetch => 'genomic_sequences' } );
-      $coge->resultset('Genome')->search( { "me.genome_id" => $gid } );
+    my ($genome)     = $coge->resultset('Genome')->find($gid);
 
     my $output;
-
     my %datasets;      #storage for dataset objects based on dataset id
     my %feat_types;    #storage for feature type objects
 
@@ -80,16 +78,28 @@ sub gen_fasta {
         my $t2 = new Benchmark if $debug;
         my $d0 = timestr( timediff( $t2, $t1 ) ) if $debug;
         say STDERR "Populate genomic sequence time: $d0" if $debug;
-        my @res = $coge->resultset('Feature')->search(
-            {
-                feature_type_id => [ 3, 5, 8 ],
-                genome_id       => $gid
-            },
-            {
-                join => [ { dataset => 'dataset_connectors' } ],
-                prefetch => [ 'feature_names', 'locations' ]
-            }
+        
+# mdb removed 8/6/15 -- es migration
+#        my @res = $coge->resultset('Feature')->search(
+#            {
+#                feature_type_id => [ 3, 5, 8 ],
+#                genome_id       => $gid
+#            },
+#            {
+#                join => [ { dataset => 'dataset_connectors' } ],
+#                prefetch => [ 'feature_names', 'locations' ]
+#            }
+#        );
+        # mdb added 8/6/15 -- es migration
+        my @res = get_features(
+            dataset_id => $genome->dataset_ids,
+            type_id    => [ 3, 5, 8 ]
         );
+#        if (scalar(@res) != scalar(@res2)) {
+#            warn "!!!!!!!!!MISMATCH\nr=", scalar(@res), ' r2=', scalar(@res2);
+#            exit;
+#        }
+        
         my $t3 = new Benchmark if $debug;
         my $d1 = timestr( timediff( $t3, $t2 ) ) if $debug;
         say STDERR "Query time: $d1"             if $debug;
@@ -123,14 +133,26 @@ sub gen_fasta {
 
             $name =~ s/\s+/_/g;
             my $feat_type_name;
-            if ( $feat_types{ $feat->feature_type_id } ) {
-                $feat_type_name = $feat_types{ $feat->feature_type_id }->name;
+# mdb removed 8/6/15 -- es migration
+#            if ( $feat_types{ $feat->feature_type_id } ) {
+#                $feat_type_name = $feat_types{ $feat->feature_type_id }->name;
+#            }
+#            else {
+#                my $feat_type = $feat->type;
+#                $feat_types{ $feat_type->id } = $feat_type;
+#                $feat_type_name = $feat_type->name;
+#            }
+            # mdb added 8/6/15 -- es migration
+            my $feat_type_id = $feat->{type};
+            if ( $feat_types{$feat_type_id} ) {
+                $feat_type_name = $feat_types{$feat_type_id}->name;
             }
             else {
                 my $feat_type = $feat->type;
                 $feat_types{ $feat_type->id } = $feat_type;
                 $feat_type_name = $feat_type->name;
             }
+            
             my $title = join( "||",
                 $chr, $start, $stop, $name, $feat->strand,
                 $feat_type_name, $feat->id, $count );
