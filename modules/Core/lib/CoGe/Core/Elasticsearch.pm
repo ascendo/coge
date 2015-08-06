@@ -1,12 +1,20 @@
 package CoGe::Core::Elasticsearch;
 
-BEGIN {
-	use Exporter 'import';
-	@EXPORT_OK = qw( build_and_filter build_filter elasticsearch_get elasticsearch_post );
-}
-
 use Data::Dumper;
 use LWP::UserAgent;
+use Search::Elasticsearch;
+use ElasticSearch::SearchBuilder;
+use CoGe::Accessory::Web qw(get_defaults);
+
+BEGIN {
+    use Exporter 'import';
+    @EXPORT_OK = qw( 
+        build_and_filter build_filter elasticsearch_get elasticsearch_post 
+        search get
+    );
+}
+
+our $DEBUG = 1;
 
 ################################################ subroutine header begin ##
 
@@ -226,6 +234,115 @@ sub init_ids {
      }
  }));
  	print elasticsearch_post("sequence/$type/1",'{"iid": 0}');
+}
+
+################################################ subroutine header begin ##
+
+=head2 search
+
+ Usage     : 
+ Purpose   : Search using the given query/type
+ Returns   : 
+ Argument  : 
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+sub search {
+    my $type  = shift;
+    my $query = shift;
+    my $class = shift; # optional class name to cast result
+    return unless ($query && $type);
+    
+    # Get configuration settings
+    my $index = get_defaults()->{ELASTICSEARCH_INDEX};
+    my $url = get_defaults()->{ELASTICSEARCH_URL};
+    unless ($index && $url) {
+        warn 'Elasicsearch::search: ERROR: missing required configuration params!';
+        return;
+    }
+    
+    # Build query
+    my $sb = ElasticSearch::SearchBuilder->new();
+    my $dsl = $sb->filter($query);
+    unless ($dsl) {
+        warn "Elasticsearch::search: ERROR: invalid query:\n", Dumper $query;
+        return;
+    }
+    
+    # Execute query
+    my $es = Search::Elasticsearch->new(nodes => $url);
+    my $results = $es->search(
+        index  => $index,
+        type   => $type,
+        scroll => '1m',
+        body   => $dsl
+    );
+    unless ($results) {
+        warn 'Elasticsearch::search: ERROR: null results';
+        return;
+    }    
+    
+    # Format results
+    my @results;
+    foreach (@{$results->{hits}->{hits}}) {
+        my $result = $_->{_source};
+        $result->{id} = $_->{_id};
+        bless($result, $class) if $class;
+        push @results, $result;
+    }
+    
+    return wantarray ? @results : \@results;
+}
+
+################################################ subroutine header begin ##
+
+=head2 get
+
+ Usage     : 
+ Purpose   : Get document by ID
+ Returns   : 
+ Argument  : 
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get {
+    my $type = shift;
+    my $id = shift;
+    my $class = shift; # optional class name to cast result
+    
+    # Get configuration settings
+    my $index = get_defaults()->{ELASTICSEARCH_INDEX};
+    my $url = get_defaults()->{ELASTICSEARCH_URL};
+    unless ($index && $url) {
+        warn 'Elasicsearch::search: ERROR: missing required configuration params!';
+        return;
+    }
+    
+    # Get document
+    my $es = Search::Elasticsearch->new(nodes => $url);
+    my $doc = $es->get(
+        index   => $index,
+        type    => $type,
+        id      => $id
+    );
+    
+    # Format result
+    my $result = $doc->{_source};
+    $result->{id} = $doc->{_id};
+    bless($result, $class) if $class;
+    
+    return $result;
 }
 
 1;
