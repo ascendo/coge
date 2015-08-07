@@ -224,7 +224,7 @@ See Also   :
 
 sub get_chromosomes {
 	my $search = shift;
-	$search->{type} = 4; # 4 is the feature_type_id for chromosomes
+	$search->{type_id} = 4; # 4 is the feature_type_id for chromosomes
 	return get_features($search, shift);
 }
 
@@ -322,15 +322,26 @@ sub get_features {
     my $dataset_id = $opts{dataset_id}; # dataset id or array ref of ids
     my $name       = $opts{name};       # feature name or array ref of names
     my $type_id    = $opts{type_id};    # feature type id or array of ids
+    my $chr        = $opts{chr};
+       $chr        = $opts{chromosome} unless defined $chr;
+    my $start      = $opts{start};
+    my $stop       = $opts{stop};
+    my $size       = $opts{size}; # max size of result set
+    my $sort       = $opts{sort}; # optional sorting
     
-#    if ($options) {
-#        $body->{size} = $options->{size} if $options->{size};
-#        $body->{sort} = $options->{sort} if $options->{sort};
-#    }
+    # Query arguments
     my %query;
     $query{dataset}      = $dataset_id if $dataset_id;
     $query{'names.name'} = $name       if $name;
     $query{type}         = $type_id    if $type_id;
+    $query{chr}          = $chr        if defined $chr;
+    $query{start}        = $start      if $start;
+    $query{stop}         = $stop       if $stop;
+    
+    # Query options
+    $query{size}         = $size       if $size;
+    $query{sort}         = $sort       if $sort;
+    
     my @results = search('features', \%query, 'CoGe::Core::Feature');
     
     return wantarray ? @results : \@results;
