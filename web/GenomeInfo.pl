@@ -216,6 +216,7 @@ sub get_feature_counts {
     
     # Count features by type
 	my $feature_counts = get_type_counts(\@dsids);
+	
 	my $feats;
 	foreach my $type_id (keys %$feature_counts) {
 	    my $type_name = $types->{$type_id}{name};
@@ -2074,7 +2075,7 @@ sub generate_body {
         EXPERIMENTS     => $experiments || undef,
         DATASETS        => get_datasets( genome => $genome, exclude_seq => 1 ) || undef,
         USER_CAN_EDIT   => $user_can_edit,
-        USER_CAN_ADD    => ( !$genome->restricted or $user_can_edit ), # mdb removed 2/19/14, not sure why it ever existed
+        USER_CAN_ADD    => ( !$genome->restricted or $user_can_edit ),
         USER_CAN_DELETE => $user_can_delete,
         DELETED         => $genome->deleted,
         IRODS_HOME      => get_irods_path(),
