@@ -44,6 +44,7 @@ BEGIN {
         get_table get_user_access_table get_experiments get_distinct_feat_types
         get_genomes_for_user get_experiments_for_user get_lists_for_user
         get_groups_for_user get_group_access_table get_feature_counts
+        get_datasets get_feature_types
     );
 }
 
@@ -387,6 +388,43 @@ sub get_feature_counts {
     #print STDERR Dumper $results, "\n";
 
     return $results;
+}
+
+sub get_feature_types {
+    my $dbh = shift;         # database connection handle
+    
+    # Execute query
+    my $query = 'SELECT feature_type_id, name, description FROM feature_type';
+    my $sth = $dbh->prepare($query);
+    $sth->execute();
+    
+    # Fetch results
+    my $results = $sth->fetchall_hashref('feature_type_id');
+    #print STDERR Dumper $results, "\n";
+    
+    return wantarray ? values %$results : $results;
+}
+
+sub get_datasets {
+    my $dbh = shift;         # database connection handle
+    my $genome_id = shift;   # genome id
+    
+    # Execute query
+    my $query = qq{
+        SELECT d.dataset_id AS dataset_id, d.name AS name, d.description AS description,
+            d.link AS link, d.version AS version, d.date AS date
+        FROM dataset_connector AS dc
+        JOIN dataset AS d ON (dc.dataset_id=d.dataset_id)
+        WHERE genome_id=$genome_id
+    };
+    my $sth = $dbh->prepare($query);
+    $sth->execute();
+    
+    # Fetch results
+    my $results = $sth->fetchall_hashref(['dataset_id']);
+    #print STDERR Dumper $results, "\n";
+    
+    return wantarray ? values %$results : $results;
 }
 
 1;
