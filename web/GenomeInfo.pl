@@ -13,6 +13,7 @@ use CoGe::Core::Experiment qw(experimentcmp);
 use CoGe::Core::Features qw(get_type_counts);
 use CoGe::Core::Genome;
 use CoGe::Core::Storage;
+use CoGeDBI qw(get_datasets get_feature_types);
 
 use HTML::Template;
 use JSON::XS;
@@ -205,24 +206,24 @@ sub get_feature_counts {
     my %opts  = @_;
     my $dsgid = $opts{dsgid};
 
+    # Get dataset ids for the genome
     my $dbh = $DB->storage->dbh;
-    my $dsids = $dbh->selectcol_arrayref('SELECT dataset_id FROM dataset_connector WHERE genome_id=' . $dsgid);
-
-	# load type names
-    my $sth = $dbh->prepare('SELECT feature_type_id,name FROM feature_type');
-    $sth->execute;
-    my $types = {};
-    while ( my $row = $sth->fetchrow_arrayref ) {
-    	$types->{$row->[0]} = $row->[1];
-    }
-
-	my %feature_counts = get_type_counts($dsids);
+    my $datasets = CoGeDBI::get_datasets($dbh, $dsgid);
+    my @dsids = keys %$datasets;
+    
+    # Get all feature types
+    my $types = get_feature_types($dbh);
+    
+    # Count features by type
+	my $feature_counts = get_type_counts(\@dsids);
+	
 	my $feats;
-	foreach my $key (keys %feature_counts) {
-		$feats->{$types->{$key}} = {
-			count => $feature_counts{$key},
-			id => $key,
-			name => $types->{$key}
+	foreach my $type_id (keys %$feature_counts) {
+	    my $type_name = $types->{$type_id}{name};
+		$feats->{$type_name} = {
+			count => $feature_counts->{$type_id},
+			id    => $type_id,
+			name  => $type_name
 		};
 	}
 
@@ -2074,7 +2075,7 @@ sub generate_body {
         EXPERIMENTS     => $experiments || undef,
         DATASETS        => get_datasets( genome => $genome, exclude_seq => 1 ) || undef,
         USER_CAN_EDIT   => $user_can_edit,
-        USER_CAN_ADD    => ( !$genome->restricted or $user_can_edit ), # mdb removed 2/19/14, not sure why it ever existed
+        USER_CAN_ADD    => ( !$genome->restricted or $user_can_edit ),
         USER_CAN_DELETE => $user_can_delete,
         DELETED         => $genome->deleted,
         IRODS_HOME      => get_irods_path(),
