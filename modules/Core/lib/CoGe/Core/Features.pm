@@ -709,27 +709,6 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_type_counts {
-#	my $e = Search::Elasticsearch->new();
-#	my $results = $e->search(
-#		index => 'coge',
-#		type => 'features',
-#		search_type => 'count',
-#		body => {
-#			query => {
-#				filtered => {
-#					filter => build_filter('dataset', shift)
-#				}
-#			},
-#			aggs => {
-#				count => {
-#					terms => {
-#						field => 'type'
-#					}
-#				}
-#			}
-#		}
-#	);
-	
 	my $results = search('features',
 	    { body =>
     	    {   query => {
@@ -748,7 +727,6 @@ sub get_type_counts {
 	    },
         { search_type => 'count' }
     );
-    warn Dumper $results;
 	
 	my %counts;
 	foreach (@{$results->{aggregations}->{count}->{buckets}}) {
