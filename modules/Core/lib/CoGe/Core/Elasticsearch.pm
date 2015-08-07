@@ -192,7 +192,9 @@ sub get_ids {
 		"params": {"bulk_size": $num_ids},
 		"lang": "groovy"
 	}));
-	return $json =~ /\[([^\]]*)\]/;
+	#warn $json if $DEBUG;
+	my ($last_id) = $json =~ /\[([^\]]*)\]/;
+	return $last_id;
 }
 
 ################################################ subroutine header begin ##
@@ -369,21 +371,50 @@ sub bulk_index {
     my $docs = shift; # ref to array of documents
     return unless ($type && $docs);
     my ($url, $index) = _get_settings();
+    my $num_docs = scalar(@$docs);
     
     # Connect and create helper
     my $es = Search::Elasticsearch->new(nodes => $url);
     my $bulk = $es->bulk_helper(
         index     => $index,
         type      => $type,
-        max_count => 1000, # batch size
-        #TODO register error callbacks
+        max_count => 0, #10_000, # batch size
+        max_size  => 0,
+        on_conflict => sub {
+            my ($action,$response,$i,$version) = @_;
+            warn 'Elasticsearch::bulk_index CONFLICT';
+        },
+        on_error => sub {
+            my ($action,$response,$i) = @_;
+            warn 'Elasticsearch::bulk_index ERROR';
+        },
+#        on_success => sub {
+#            my ($action,$response,$i) = @_;
+#            warn 'Elasticsearch::bulk_index SUCCESS';
+#        },
     );
     
-    # Add documents and flush
-    $bulk->index($docs);
-    $bulk->flush;
+    # Allocate unique ID's for documents
+    my $last_id = get_ids($type, $num_docs);
+    my $id = $last_id - $num_docs + 1;
+    #warn 'last_id=', $last_id, ' first_id=', $id, ' num_ids=', $num_docs;
     
-    return $result;
+    # Add documents
+    foreach my $source (@$docs) {
+        my $doc = {
+            id => $id++,
+            source => $source
+        };
+        $bulk->index($doc);
+    }
+    my $result = $bulk->flush;
+    if (!$result || !$result->{items} || scalar(@{$result->{items}}) != $num_docs) {
+        warn 'Elasticsearch::bulk_index: ERROR: incomplete load, indexed ', scalar(@{$result->{items}}), ', expected ', $num_docs;
+        #warn Dumper $result;
+        return 0;
+    }
+    
+    return 1;
 }
 
 sub _get_settings {
@@ -391,7 +422,7 @@ sub _get_settings {
     my $index = $conf->{ELASTICSEARCH_INDEX};
     my $url   = $conf->{ELASTICSEARCH_URL};
     unless ($index && $url) {
-        warn 'Elasicsearch::search: ERROR: missing required configuration params!';
+        warn 'Elasicsearch: ERROR: missing required configuration params!';
         return;
     }
     return ( $url, $index );
