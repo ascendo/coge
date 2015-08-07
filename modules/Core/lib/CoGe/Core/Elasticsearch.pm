@@ -10,7 +10,7 @@ BEGIN {
     use Exporter 'import';
     @EXPORT_OK = qw( 
         build_and_filter build_filter elasticsearch_get elasticsearch_post 
-        search get
+        search get bulk_index
     );
 }
 
@@ -257,14 +257,7 @@ sub search {
     my $query = shift;
     my $class = shift; # optional class name to cast result
     return unless ($query && $type);
-    
-    # Get configuration settings
-    my $index = get_defaults()->{ELASTICSEARCH_INDEX};
-    my $url = get_defaults()->{ELASTICSEARCH_URL};
-    unless ($index && $url) {
-        warn 'Elasicsearch::search: ERROR: missing required configuration params!';
-        return;
-    }
+    my ($url, $index) = _get_settings();
     
     # Build query
     my $sb = ElasticSearch::SearchBuilder->new();
@@ -322,14 +315,7 @@ sub get {
     my $type = shift;
     my $id = shift;
     my $class = shift; # optional class name to cast result
-    
-    # Get configuration settings
-    my $index = get_defaults()->{ELASTICSEARCH_INDEX};
-    my $url = get_defaults()->{ELASTICSEARCH_URL};
-    unless ($index && $url) {
-        warn 'Elasicsearch::search: ERROR: missing required configuration params!';
-        return;
-    }
+    my ($url, $index) = _get_settings();
     
     # Get document
     my $es = Search::Elasticsearch->new(nodes => $url);
@@ -345,6 +331,56 @@ sub get {
     bless($result, $class) if $class;
     
     return $result;
+}
+
+################################################ subroutine header begin ##
+
+=head2 bulk_index
+
+ Usage     : 
+ Purpose   : Bulk index a set of documents
+ Returns   : 
+ Argument  : 
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub bulk_index {
+    my $type = shift; # type name
+    my $docs = shift; # ref to array of documents
+    return unless ($type && $docs);
+    my ($url, $index) = _get_settings();
+    
+    # Connect and create helper
+    my $es = Search::Elasticsearch->new(nodes => $url);
+    my $bulk = $es->bulk_helper(
+        index     => $index,
+        type      => $type,
+        max_count => 1000, # batch size
+        #TODO register error callbacks
+    );
+    
+    # Add documents and flush
+    $bulk->index($docs);
+    $bulk->flush;
+    
+    return $result;
+}
+
+sub _get_settings {
+    my $conf  = get_defaults();
+    my $index = $conf->{ELASTICSEARCH_INDEX};
+    my $url   = $conf->{ELASTICSEARCH_URL};
+    unless ($index && $url) {
+        warn 'Elasicsearch::search: ERROR: missing required configuration params!';
+        return;
+    }
+    return ( $url, $index );
 }
 
 1;
