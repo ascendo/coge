@@ -14,6 +14,8 @@ use CoGe::Accessory::Web qw(get_defaults);
 use CoGe::Accessory::Utils qw( commify units );
 use CoGe::Core::Genome qw(fix_chromosome_id);
 use CoGe::Core::Storage;
+use CoGe::Core::Elasticsearch qw(bulk_index);
+use CoGeDBI qw(get_feature_types);
 use List::Util qw( min max );
 use Benchmark;
 
@@ -29,7 +31,6 @@ use vars qw($staging_dir $data_file $wid
 
 GetOptions(
     "staging_dir=s" => \$staging_dir,
-#    "result_dir=s"  => \$result_dir,     # results path
     "wid=s"         => \$wid,            # workflow id
     "data_file=s"   => \$data_file,      # data file (JS escape)
     "name=s"        => \$name,           # experiment name (JS escaped)
@@ -296,7 +297,7 @@ my $datasource = $coge->resultset('DataSource')->find_or_create( { name => $sour
 unless ($datasource) {
     print STDOUT "log: error creating data source\n";
     exit(-1);
-  }
+}
 
 # Create dataset
 my $dataset = $coge->resultset('Dataset')->create(
@@ -329,8 +330,8 @@ unless ($dsconn) {
 my $total_annot = 0;
 foreach my $chr_loc ( keys %data ) {
     foreach my $name ( keys %{ $data{$chr_loc} } ) {
-        foreach my $feat_type ( keys %{ $data{$chr_loc}{$name} } ) {
-        	foreach ( @{$data{$chr_loc}{$name}{$feat_type}{loc}} ) {
+        foreach my $feat_type_name ( keys %{ $data{$chr_loc}{$name} } ) {
+        	foreach ( @{$data{$chr_loc}{$name}{$feat_type_name}{loc}} ) {
         		$total_annot++;
         	}
         }
@@ -338,24 +339,162 @@ foreach my $chr_loc ( keys %data ) {
 }
 
 # Populate all feature-related tables in DB
-print STDOUT "log: Loading database ...\n";
+print STDOUT "log: Processing annotations ...\n";
 my %anno_types;    # hash to store annotation type objects
-my %feat_types;    # store feature type objects
+#my %feat_types;    # store feature type objects
 my $loaded_annot = 0;
-my @loc_buffer;     # buffer for bulk inserts into Location table
-my @anno_buffer;    # buffer for bulk inserts into FeatureAnnotation table
-my @name_buffer;    # buffer for bulk inserts into FeatureName table
+#my @loc_buffer;     # buffer for bulk inserts into Location table
+#my @anno_buffer;    # buffer for bulk inserts into FeatureAnnotation table
+#my @name_buffer;    # buffer for bulk inserts into FeatureName table
+
+# mdb removed 8/6/15 -- ES migration
+#foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
+#    foreach my $name ( sort { $a cmp $b } keys %{ $data{$chr_loc} } ) {
+#      	my $pctLoaded = int( 100 * $loaded_annot / $total_annot );
+#        print STDOUT "log: Loaded ", commify($loaded_annot), " annotations (", ( $pctLoaded ? $pctLoaded : '<1' ), "%)\n\n"
+#          if ( $loaded_annot and ( $loaded_annot % 1000 ) == 0 );
+#
+#        foreach my $feat_type_name ( sort { $a cmp $b } keys %{ $data{$chr_loc}{$name} } ) {
+#	        print $log "\n" if $log;
+#
+#            my ($start, $stop, $strand, $chr);
+#            my $loc = $data{$chr_loc}{$name}{$feat_type_name}{loc};
+#            if (@$loc) {
+#                $start    = min map { $_->{start} } @$loc;
+#                $stop     = max map { $_->{stop}  } @$loc;
+#                ($strand) = map { $_->{strand} } @$loc;
+#                ($chr)    = map { $_->{chr}    } @$loc;
+#            }
+#            else { # mdb added else 4/8/14 issue 358 - no locations (e.g. tRNA w/o parent)
+#                my $coords = $data{$chr_loc}{$name}{$feat_type_name}{coords};
+#                $start  = $coords->{start};
+#                $stop   = $coords->{stop};
+#                $strand = $coords->{strand};
+#                $chr    = $coords->{chr};
+#            }
+#
+#            # Add feature type to DB
+#            $feat_types{$feat_type_name} = $coge->resultset('FeatureType')->find_or_create( { name => $feat_type_name } )
+#              if $GO && !$feat_types{$feat_type_name};
+#            my $feat_type_obj = $feat_types{$feat_type_name};
+#
+#            print $log "Creating feature of type $feat_type_name\n" if $log;
+#
+#            # mdb added check 4/8/14 issue 358
+#            unless (defined $start and defined $stop and defined $chr) {
+#                print $log "warning: feature '", (defined $name ? $name : ''), "' (type '$feat_type_name') missing coordinates", "\n" if $log;
+#                #print STDOUT Dumper $data{$chr_loc}{$name}{$feat_type_name}, "\n";
+#                next; #exit(-1);
+#            }
+#
+#            # Add feature
+#            #TODO this could be batched by nesting location & other inserts,
+#            # see http://search.cpan.org/~abraxxa/DBIx-Class-0.08209/lib/DBIx/Class/ResultSet.pm#populate
+#            my $feat = $dataset->add_to_features(
+#                {
+#                    feature_type_id => $feat_type_obj->id,
+#                    start           => $start,
+#                    stop            => $stop,
+#                    chromosome      => $chr,
+#                    strand          => $strand
+#                }
+#            ) if $GO;
+#            my $featid = $feat ? $feat->id : "no_go";
+#            
+#            # Add locations
+#            my %seen_locs;
+#            my $loc_count = 0;
+#            foreach my $loc ( sort { $a->{start} <=> $b->{start} } @$loc ) {
+#                my ($start, $stop) = ($loc->{start}, $loc->{stop});
+#                $loc_count++;
+#                next if $feat_type_name eq "gene" && $loc_count > 1; #only use the first one as this will be the full length of the gene.  Stupid hack
+#                next if $seen_locs{$start}{$stop};
+#                $seen_locs{$start}{$stop} = 1;
+#                print $log "Adding location $chr:(" . $start . "-" . $stop . ", $strand)\n" if $log;
+#                $loaded_annot++;
+#                batch_add(
+#                    \@loc_buffer,
+#                    'location',
+#                    {
+#                        feature_id => $feat->id,
+#                        chromosome => $loc->{chr},
+#                        start      => $loc->{start},
+#                        stop       => $loc->{stop},
+#                        strand     => $loc->{strand}
+#                    }
+#                ) if $GO;
+#            }
+#
+#            # Add feature names and annotations
+#            my %names = map { $_ => 1 } keys %{ $data{$chr_loc}{$name}{$feat_type_name}{names} };
+#            my %seen_annos; #hash to store annotations so duplicates aren't added
+#            master_names: foreach my $tmp ( keys %names ) {
+#                foreach my $re (@skip_names_re) {
+#                    next master_names if $tmp =~ /$re/i;
+#                }
+#                my $master = 0;
+#                $master = 1 if $tmp eq $name;
+#                print $log "Adding name $tmp to feature ", $featid,
+#                  ( $master ? " (MASTER)" : '' ), "\n"
+#                  if $log;
+#
+#                batch_add(
+#                    \@name_buffer,
+#                    'feature_name',
+#                    {    
+#                        feature_id   => $feat->id,
+#                        name         => $tmp,
+#                        primary_name => $master
+#                    }
+#                ) if $GO;
+#
+#                if ( $annos{$tmp} ) {
+#                    foreach my $anno ( keys %{ $annos{$tmp} } ) {
+#                        next unless $anno;
+#                        next if $seen_annos{$anno};
+#                        $seen_annos{$anno} = 1;
+#                        
+#                        # Add annotation type to DB
+#                        my $type_name = $annos{$tmp}{$anno}{type} || "Note";
+#                        my ($anno_type) = $anno_types{$type_name};
+#                        unless ($anno_type) {
+#                            ($anno_type) = $coge->resultset('AnnotationType')->find_or_create( { name => $type_name } );
+#                            $anno_types{$type_name} = $anno_type;
+#                        }
+#                        
+#                        # Add feature annotation to DB
+#                        my $link = $annos{$tmp}{$anno}{link};
+#                        print $log "Adding annotation ($type_name): $anno\n" . ( $link ? "\tlink: $link" : '' ) . "\n" if $log;
+#                        batch_add(
+#                            \@anno_buffer,
+#                            'feature_annotation',
+#                            {
+#                                feature_id         => $feat->id,
+#                                annotation_type_id => $anno_type->id,
+#                                annotation         => $anno,
+#                                link               => $link
+#                            }
+#                        ) if $GO && $anno;
+#                    }
+#                }
+#            }
+#        }
+#    }
+#}
+# mdb added 8/6/15 -- ES migration
+my @features;
+my %featureTypesByName = map { $_->{name} => $_ } get_feature_types($coge->storage->dbh);
 foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
     foreach my $name ( sort { $a cmp $b } keys %{ $data{$chr_loc} } ) {
-      	my $pctLoaded = int( 100 * $loaded_annot / $total_annot );
-        print STDOUT "log: Loaded ", commify($loaded_annot), " annotations (", ( $pctLoaded ? $pctLoaded : '<1' ), "%)\n\n"
+        my $pctLoaded = int( 100 * $loaded_annot / $total_annot );
+        print STDOUT "log: Processed ", commify($loaded_annot), " annotations (", ( $pctLoaded ? $pctLoaded : '<1' ), "%)\n\n"
           if ( $loaded_annot and ( $loaded_annot % 1000 ) == 0 );
 
-        foreach my $feat_type ( sort { $a cmp $b } keys %{ $data{$chr_loc}{$name} } ) {
-	        print $log "\n" if $log;
+        foreach my $feat_type_name ( sort { $a cmp $b } keys %{ $data{$chr_loc}{$name} } ) {
+            print $log "\n" if $log;
 
             my ($start, $stop, $strand, $chr);
-            my $loc = $data{$chr_loc}{$name}{$feat_type}{loc};
+            my $loc = $data{$chr_loc}{$name}{$feat_type_name}{loc};
             if (@$loc) {
                 $start    = min map { $_->{start} } @$loc;
                 $stop     = max map { $_->{stop}  } @$loc;
@@ -363,7 +502,7 @@ foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
                 ($chr)    = map { $_->{chr}    } @$loc;
             }
             else { # mdb added else 4/8/14 issue 358 - no locations (e.g. tRNA w/o parent)
-                my $coords = $data{$chr_loc}{$name}{$feat_type}{coords};
+                my $coords = $data{$chr_loc}{$name}{$feat_type_name}{coords};
                 $start  = $coords->{start};
                 $stop   = $coords->{stop};
                 $strand = $coords->{strand};
@@ -371,32 +510,39 @@ foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
             }
 
             # Add feature type to DB
-            $feat_types{$feat_type} = $coge->resultset('FeatureType')->find_or_create( { name => $feat_type } )
-              if $GO && !$feat_types{$feat_type};
-            my $feat_type_obj = $feat_types{$feat_type};
-
-            print $log "Creating feature of type $feat_type\n" if $log;
+            unless ($featureTypesByName{$feat_type_name}) {
+                print $log "Creating feature of type $feat_type_name\n" if $log;
+                $featureTypesByName{$feat_type_name} = $coge->resultset('FeatureType')->find_or_create( { name => $feat_type_name } )
+                    if $GO;
+            }
+            my $feat_type_id = $featureTypesByName{$feat_type_name}{feature_type_id};
 
             # mdb added check 4/8/14 issue 358
             unless (defined $start and defined $stop and defined $chr) {
-                print $log "warning: feature '", (defined $name ? $name : ''), "' (type '$feat_type') missing coordinates", "\n" if $log;
-                #print STDOUT Dumper $data{$chr_loc}{$name}{$feat_type}, "\n";
+                print $log "warning: feature '", (defined $name ? $name : ''), "' (type '$feat_type_name') missing coordinates", "\n" if $log;
+                #print STDOUT Dumper $data{$chr_loc}{$name}{$feat_type_name}, "\n";
                 next; #exit(-1);
             }
 
             # Add feature
-            #TODO this could be batched by nesting location & other inserts,
-            # see http://search.cpan.org/~abraxxa/DBIx-Class-0.08209/lib/DBIx/Class/ResultSet.pm#populate
-            my $feat = $dataset->add_to_features(
-                {
-                    feature_type_id => $feat_type_obj->id,
-                    start           => $start,
-                    stop            => $stop,
-                    chromosome      => $chr,
-                    strand          => $strand
-                }
-            ) if $GO;
-            my $featid = $feat ? $feat->id : "no_go";
+#            my $feat = $dataset->add_to_features(
+#                {
+#                    feature_type_id => $feat_type_obj->id,
+#                    start           => $start,
+#                    stop            => $stop,
+#                    chromosome      => $chr,
+#                    strand          => $strand
+#                }
+#            ) if $GO;
+#            my $featid = $feat ? $feat->id : "no_go";
+            my $feat = {
+                dataset     => $dataset->id,
+                type        => $feat_type_id,
+                start       => $start,
+                stop        => $stop,
+                chromosome  => $chr,
+                strand      => $strand,
+            };
             
             # Add locations
             my %seen_locs;
@@ -404,26 +550,33 @@ foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
             foreach my $loc ( sort { $a->{start} <=> $b->{start} } @$loc ) {
                 my ($start, $stop) = ($loc->{start}, $loc->{stop});
                 $loc_count++;
-                next if $feat_type eq "gene" && $loc_count > 1; #only use the first one as this will be the full length of the gene.  Stupid hack
+                next if $feat_type_name eq "gene" && $loc_count > 1; #only use the first one as this will be the full length of the gene.  Stupid hack
                 next if $seen_locs{$start}{$stop};
                 $seen_locs{$start}{$stop} = 1;
                 print $log "Adding location $chr:(" . $start . "-" . $stop . ", $strand)\n" if $log;
                 $loaded_annot++;
-                batch_add(
-                    \@loc_buffer,
-                    'location',
+#                batch_add(
+#                    \@loc_buffer,
+#                    'location',
+#                    {
+#                        feature_id => $feat->id,
+#                        chromosome => $loc->{chr},
+#                        start      => $loc->{start},
+#                        stop       => $loc->{stop},
+#                        strand     => $loc->{strand}
+#                    }
+#                ) if $GO;
+                push @{$feat->{locations}}, 
                     {
-                        feature_id => $feat->id,
                         chromosome => $loc->{chr},
                         start      => $loc->{start},
                         stop       => $loc->{stop},
                         strand     => $loc->{strand}
-                    }
-                ) if $GO;
+                    };
             }
 
             # Add feature names and annotations
-            my %names = map { $_ => 1 } keys %{ $data{$chr_loc}{$name}{$feat_type}{names} };
+            my %names = map { $_ => 1 } keys %{ $data{$chr_loc}{$name}{$feat_type_name}{names} };
             my %seen_annos; #hash to store annotations so duplicates aren't added
             master_names: foreach my $tmp ( keys %names ) {
                 foreach my $re (@skip_names_re) {
@@ -431,19 +584,24 @@ foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
                 }
                 my $master = 0;
                 $master = 1 if $tmp eq $name;
-                print $log "Adding name $tmp to feature ", $featid,
+                print $log "Adding name $tmp to feature ", #$featid,
                   ( $master ? " (MASTER)" : '' ), "\n"
                   if $log;
 
-                batch_add(
-                    \@name_buffer,
-                    'feature_name',
-                    {    
-                        feature_id   => $feat->id,
+#                batch_add(
+#                    \@name_buffer,
+#                    'feature_name',
+#                    {    
+#                        feature_id   => $feat->id,
+#                        name         => $tmp,
+#                        primary_name => $master
+#                    }
+#                ) if $GO;
+                push @{$feat->{names}},
+                    {
                         name         => $tmp,
                         primary_name => $master
-                    }
-                ) if $GO;
+                    };
 
                 if ( $annos{$tmp} ) {
                     foreach my $anno ( keys %{ $annos{$tmp} } ) {
@@ -462,27 +620,37 @@ foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
                         # Add feature annotation to DB
                         my $link = $annos{$tmp}{$anno}{link};
                         print $log "Adding annotation ($type_name): $anno\n" . ( $link ? "\tlink: $link" : '' ) . "\n" if $log;
-                        batch_add(
-                            \@anno_buffer,
-                            'feature_annotation',
+#                        batch_add(
+#                            \@anno_buffer,
+#                            'feature_annotation',
+#                            {
+#                                feature_id         => $feat->id,
+#                                annotation_type_id => $anno_type->id,
+#                                annotation         => $anno,
+#                                link               => $link
+#                            }
+#                        ) if $GO && $anno;
+                        push @{$feat->{annotations}},
                             {
-                                feature_id         => $feat->id,
-                                annotation_type_id => $anno_type->id,
-                                annotation         => $anno,
-                                link               => $link
-                            }
-                        ) if $GO && $anno;
+                                type       => $anno_type->id,
+                                annotation => $anno,
+                                link       => $link
+                            };
                     }
                 }
             }
+            
+            push @features, $feat;
         }
     }
 }
 
 # Flush DB insertion buffers
-batch_add( \@loc_buffer,  'location' );
-batch_add( \@name_buffer, 'feature_name' );
-batch_add( \@anno_buffer, 'feature_annotation' );
+#batch_add( \@loc_buffer,  'location' );
+#batch_add( \@name_buffer, 'feature_name' );
+#batch_add( \@anno_buffer, 'feature_annotation' );
+print STDOUT "log: Loading annotations into DB\n";
+bulk_index('features', \@features);
 print STDOUT "log: " . commify($loaded_annot) . " annotations loaded\n";
 
 # Print times to parse and load
