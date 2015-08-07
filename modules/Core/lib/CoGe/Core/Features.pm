@@ -32,7 +32,7 @@ use strict;
 use warnings;
 
 use CoGe::Accessory::Web qw(get_defaults);
-use CoGe::Core::Elasticsearch qw(build_and_filter build_filter elasticsearch_get elasticsearch_post);
+use CoGe::Core::Elasticsearch qw(build_and_filter build_filter elasticsearch_get elasticsearch_post search get);
 use CoGeX;
 use Data::Dumper;
 use Encode qw(encode);
@@ -224,7 +224,7 @@ See Also   :
 
 sub get_chromosomes {
 	my $search = shift;
-	$search->{type} = 4; # 4 is the feature_type_id for chromosomes
+	$search->{type_id} = 4; # 4 is the feature_type_id for chromosomes
 	return get_features($search, shift);
 }
 
@@ -245,14 +245,18 @@ See Also   :
 
 ################################################## subroutine header end ##
 
+#sub get_feature {
+#	my $id = shift;
+#	my $index = shift || 'coge'; # optional index name
+#	
+#	my $json = elasticsearch_get($index . '/features/' . $id . '/_source');
+#	my $feature = decode_json($json);
+#	$feature->{id} = $id;
+#	return bless($feature, 'CoGe::Core::Feature');
+#}
 sub get_feature {
-	my $id = shift;
-	my $index = shift || 'coge'; # optional index name
-	
-	my $json = elasticsearch_get($index . '/features/' . $id . '/_source');
-	my $feature = decode_json($json);
-	$feature->{id} = $id;
-	return bless($feature, 'CoGe::Core::Feature');
+    my $id = shift;
+    return get('features', $id, 'CoGe::Core::Feature');
 }
 
 ################################################ subroutine header begin ##
@@ -276,38 +280,70 @@ See Also   :
 
 ################################################## subroutine header end ##
 
+#sub get_features {
+#	my $search = shift;
+#	my $options = shift;
+#	my $index = shift || 'coge'; # optional index name
+#	my $body = {
+#		query => {
+#			filtered => {
+#				filter => build_and_filter($search)
+#			}
+#		},
+#		size => 10000000
+#	};
+#	if ($options) {
+#		$body->{size} = $options->{size} if $options->{size};
+#		$body->{sort} = $options->{sort} if $options->{sort};
+#	}
+#    
+#	my $e = Search::Elasticsearch->new(nodes => 'localhost:9200');
+#	my $results = $e->search(
+#		index => $index,
+#		type => 'features',
+#		scroll => '1m',
+#		body => $body
+#	);
+#	
+#	my @hits;
+#	foreach (@{$results->{hits}->{hits}}) {
+#		my $feature = $_->{_source};
+#		$feature->{id} = $_->{_id};
+#		push(@hits, bless($feature, 'CoGe::Core::Feature'));
+#	}
+#	if (!@hits && $DEBUG) {
+#		print STDERR 'no hits for query: ' . Dumper \$body;
+#	}
+#	
+#	return wantarray ? @hits : \@hits;
+#}
 sub get_features {
-	my $search = shift;
-	my $options = shift;
-	my $index = shift || 'coge'; # optional index name
-	my $body = {
-		query => {
-			filtered => {
-				filter => build_and_filter($search)
-			}
-		},
-		size => 10000000
-	};
-	if ($options) {
-		$body->{size} = $options->{size} if $options->{size};
-		$body->{sort} = $options->{sort} if $options->{sort};
-	}
-	my $e = Search::Elasticsearch->new();
-	my $results = $e->search(
-		index => 'coge',
-		type => 'features',
-		body => $body
-	);
-	my @hits;
-	foreach (@{$results->{hits}->{hits}}) {
-		my $feature = $_->{_source};
-		$feature->{id} = $_->{_id};
-		push(@hits, bless($feature, 'CoGe::Core::Feature'));
-	}
-	if (!@hits) {
-		print STDERR 'no hits for query: ' . Dumper \$body;
-	}
-	return wantarray ? @hits : \@hits;
+    my %opts = @_;
+    my $dataset_id = $opts{dataset_id}; # dataset id or array ref of ids
+    my $name       = $opts{name};       # feature name or array ref of names
+    my $type_id    = $opts{type_id};    # feature type id or array of ids
+    my $chr        = $opts{chr} || $opts{chromosome};
+    my $start      = $opts{start};
+    my $stop       = $opts{stop};
+    my $size       = $opts{size}; # max size of result set
+    my $sort       = $opts{sort}; # optional sorting
+    
+    # Query arguments
+    my %query;
+    $query{dataset}      = $dataset_id if $dataset_id;
+    $query{'names.name'} = $name       if $name;
+    $query{type}         = $type_id    if $type_id;
+    $query{chr}          = $chr        if defined $chr;
+    $query{start}        = $start      if $start;
+    $query{stop}         = $stop       if $stop;
+    
+    # Query options
+    $query{size}         = $size       if $size;
+    $query{sort}         = $sort       if $sort;
+    
+    my @results = search('features', \%query, 'CoGe::Core::Feature');
+    
+    return wantarray ? @results : \@results;
 }
 
 ################################################ subroutine header begin ##

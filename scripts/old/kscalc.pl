@@ -14,6 +14,7 @@ use CoGeX;
 use CoGe::Accessory::LogUser;
 use CoGe::Accessory::Web;
 use CoGe::Algos::KsCalc;
+use CoGe::Core::Features qw(get_feature);
 
 our (
     $cogeweb, $basename, $infile,  $dbfile,   $blockfile, $coge,
@@ -95,7 +96,7 @@ sub batch_add {
     my $buffer = $opts{buffer};
     my $handle = $opts{handle};
     my $size = $opts{size};
-    $size //= 10000;
+    $size //= 10000; #/
     my $row = $opts{row};
     my $result;
 
@@ -139,8 +140,7 @@ sub gen_ks_db {
     my $infile  = $opts{infile};
     my $outfile = $opts{outfile};
     CoGe::Accessory::Web::write_log( "Generating ks data.", $cogeweb->logfile );
-    CoGe::Accessory::Web::write_log( "initializing ks database $outfile",
-        $cogeweb->logfile );
+    CoGe::Accessory::Web::write_log( "initializing ks database $outfile", $cogeweb->logfile );
     my $create = qq{
 CREATE TABLE ks_data
 (
@@ -169,12 +169,11 @@ DNA_align_2
     my @data;
     my $i  = 0;
     while (<IN>) {
-
         next if /^#/;
         chomp;
-        my @line  = split /\t/;
-        my @item1 = split /\|\|/, $line[1];
-        my @item2 = split /\|\|/, $line[5];
+        my @line  = split(/\t/);
+        my @item1 = split(/\|\|/, $line[1]);
+        my @item2 = split(/\|\|/, $line[5]);
         unless ( $item1[6] && $item2[6] ) {
             warn "Line does not appear to contain coge feature ids:  $_\n";
             next;
@@ -209,8 +208,10 @@ DNA_align_2
             my $count++;
             my ($fid1) = $item->[2] =~ /(^\d+$)/;
             my ($fid2) = $item->[3] =~ /(^\d+$)/;
-            my ($feat1) = $coge->resultset('Feature')->find($fid1);
-            my ($feat2) = $coge->resultset('Feature')->find($fid2);
+            #my ($feat1) = $coge->resultset('Feature')->find($fid1);
+            #my ($feat2) = $coge->resultset('Feature')->find($fid2);
+            my $feat1 = get_feature($fid1);
+            my $feat2 = get_feature($fid2);
             my $max_res;
             my $ks = new CoGe::Algos::KsCalc(config=>$CONFIG);
             $ks->nwalign_server_port($ports->[$i]);
@@ -405,9 +406,9 @@ sub process_block {
     my @ks;
     my @kn;
     foreach my $item (@$block) {
-        my @line = split /\t/,   $item;
-        my @seq1 = split /\|\|/, $line[1];
-        my @seq2 = split /\|\|/, $line[5];
+        my @line = split(/\t/,   $item);
+        my @seq1 = split(/\|\|/, $line[1]);
+        my @seq2 = split(/\|\|/, $line[5]);
         my $ks   = $ksdata->{ $seq1[6] }{ $seq2[6] };
         if ( defined $ks->{dS} ) {
             unshift @line, $ks->{dN};

@@ -1,12 +1,20 @@
 package CoGe::Core::Elasticsearch;
 
-BEGIN {
-	use Exporter 'import';
-	@EXPORT_OK = qw( build_and_filter build_filter elasticsearch_get elasticsearch_post );
-}
-
 use Data::Dumper;
 use LWP::UserAgent;
+use Search::Elasticsearch;
+use ElasticSearch::SearchBuilder;
+use CoGe::Accessory::Web qw(get_defaults);
+
+BEGIN {
+    use Exporter 'import';
+    @EXPORT_OK = qw( 
+        build_and_filter build_filter elasticsearch_get elasticsearch_post 
+        search get bulk_index
+    );
+}
+
+our $DEBUG = 1;
 
 ################################################ subroutine header begin ##
 
@@ -63,7 +71,7 @@ sub build_filter {
 	}
 	if ($field eq 'not') {
 		my @keys = keys %$value;
-		my $key = @keys[0];
+		my $key = $keys[0];
 		return {not => build_filter($key, $value->{$key}) };
 	}
 	if ($field eq 'or') {
@@ -226,6 +234,153 @@ sub init_ids {
      }
  }));
  	print elasticsearch_post("sequence/$type/1",'{"iid": 0}');
+}
+
+################################################ subroutine header begin ##
+
+=head2 search
+
+ Usage     : 
+ Purpose   : Search using the given query/type
+ Returns   : 
+ Argument  : 
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+sub search {
+    my $type  = shift;
+    my $query = shift;
+    my $class = shift; # optional class name to cast result
+    return unless ($query && $type);
+    my ($url, $index) = _get_settings();
+    
+    # Build query
+    my $sb = ElasticSearch::SearchBuilder->new();
+    my $dsl = $sb->filter($query);
+    unless ($dsl) {
+        warn "Elasticsearch::search: ERROR: invalid query:\n", Dumper $query;
+        return;
+    }
+    warn Dumper $dsl if $DEBUG;
+    
+    # Execute query
+    my $es = Search::Elasticsearch->new(nodes => $url);
+    my $results = $es->search(
+        index  => $index,
+        type   => $type,
+        size   => $query->{size} || 1_000_000,
+        body   => $dsl
+    );
+    unless ($results) {
+        warn 'Elasticsearch::search: ERROR: null results';
+        return;
+    }
+    #warn Dumper $results if $DEBUG;
+    
+    # Format results
+    my @results;
+    foreach (@{$results->{hits}->{hits}}) {
+        my $result = $_->{_source};
+        $result->{id} = $_->{_id};
+        bless($result, $class) if $class;
+        push @results, $result;
+    }
+    
+    return wantarray ? @results : \@results;
+}
+
+################################################ subroutine header begin ##
+
+=head2 get
+
+ Usage     : 
+ Purpose   : Get document by ID
+ Returns   : 
+ Argument  : 
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get {
+    my $type = shift;
+    my $id = shift;
+    my $class = shift; # optional class name to cast result
+    my ($url, $index) = _get_settings();
+    
+    # Get document
+    my $es = Search::Elasticsearch->new(nodes => $url);
+    my $doc = $es->get(
+        index   => $index,
+        type    => $type,
+        id      => $id
+    );
+    
+    # Format result
+    my $result = $doc->{_source};
+    $result->{id} = $doc->{_id};
+    bless($result, $class) if $class;
+    
+    return $result;
+}
+
+################################################ subroutine header begin ##
+
+=head2 bulk_index
+
+ Usage     : 
+ Purpose   : Bulk index a set of documents
+ Returns   : 
+ Argument  : 
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub bulk_index {
+    my $type = shift; # type name
+    my $docs = shift; # ref to array of documents
+    return unless ($type && $docs);
+    my ($url, $index) = _get_settings();
+    
+    # Connect and create helper
+    my $es = Search::Elasticsearch->new(nodes => $url);
+    my $bulk = $es->bulk_helper(
+        index     => $index,
+        type      => $type,
+        max_count => 1000, # batch size
+        #TODO register error callbacks
+    );
+    
+    # Add documents and flush
+    $bulk->index($docs);
+    $bulk->flush;
+    
+    return $result;
+}
+
+sub _get_settings {
+    my $conf  = get_defaults();
+    my $index = $conf->{ELASTICSEARCH_INDEX};
+    my $url   = $conf->{ELASTICSEARCH_URL};
+    unless ($index && $url) {
+        warn 'Elasicsearch::search: ERROR: missing required configuration params!';
+        return;
+    }
+    return ( $url, $index );
 }
 
 1;

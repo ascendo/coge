@@ -65,6 +65,11 @@ sub strand {
 	return $self->{strand};
 }
 
+sub dataset_id {
+    my $self = shift;
+    return $self->{dataset};
+}
+
 ################################################ subroutine header begin ##
 
 =head2 aa_frequency

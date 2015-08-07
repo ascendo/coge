@@ -1600,7 +1600,7 @@ sub features {
 	my $self = shift;
 	my $search = shift;
 	print STDERR Dumper $search;
-	$search->{dataset} = $self->id;
+	$search->{dataset_id} = $self->id;
 	my $features = get_features($search);
 	return wantarray ? @{$features} : $features;
 }
