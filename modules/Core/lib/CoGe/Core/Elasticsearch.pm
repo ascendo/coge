@@ -273,7 +273,7 @@ sub search {
     my $results = $es->search(
         index  => $index,
         type   => $type,
-        size   => 1000*1000, #FIXME magic number
+        size   => $query->{size} || 1_000_000,
         body   => $dsl
     );
     unless ($results) {
