@@ -339,13 +339,15 @@ foreach my $chr_loc ( keys %data ) {
 }
 
 # Populate all feature-related tables in DB
-print STDOUT "log: Loading database ...\n";
+print STDOUT "log: Processing annotations ...\n";
 my %anno_types;    # hash to store annotation type objects
-my %feat_types;    # store feature type objects
+#my %feat_types;    # store feature type objects
 my $loaded_annot = 0;
-my @loc_buffer;     # buffer for bulk inserts into Location table
-my @anno_buffer;    # buffer for bulk inserts into FeatureAnnotation table
-my @name_buffer;    # buffer for bulk inserts into FeatureName table
+#my @loc_buffer;     # buffer for bulk inserts into Location table
+#my @anno_buffer;    # buffer for bulk inserts into FeatureAnnotation table
+#my @name_buffer;    # buffer for bulk inserts into FeatureName table
+
+# mdb removed 8/6/15 -- ES migration
 #foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
 #    foreach my $name ( sort { $a cmp $b } keys %{ $data{$chr_loc} } ) {
 #      	my $pctLoaded = int( 100 * $loaded_annot / $total_annot );
@@ -479,12 +481,13 @@ my @name_buffer;    # buffer for bulk inserts into FeatureName table
 #        }
 #    }
 #}
+# mdb added 8/6/15 -- ES migration
 my @features;
 my %featureTypesByName = map { $_->{name} => $_ } get_feature_types($coge->storage->dbh);
 foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
     foreach my $name ( sort { $a cmp $b } keys %{ $data{$chr_loc} } ) {
         my $pctLoaded = int( 100 * $loaded_annot / $total_annot );
-        print STDOUT "log: Loaded ", commify($loaded_annot), " annotations (", ( $pctLoaded ? $pctLoaded : '<1' ), "%)\n\n"
+        print STDOUT "log: Processed ", commify($loaded_annot), " annotations (", ( $pctLoaded ? $pctLoaded : '<1' ), "%)\n\n"
           if ( $loaded_annot and ( $loaded_annot % 1000 ) == 0 );
 
         foreach my $feat_type_name ( sort { $a cmp $b } keys %{ $data{$chr_loc}{$name} } ) {
@@ -646,7 +649,7 @@ foreach my $chr_loc ( sort { $a cmp $b } keys %data ) {
 #batch_add( \@loc_buffer,  'location' );
 #batch_add( \@name_buffer, 'feature_name' );
 #batch_add( \@anno_buffer, 'feature_annotation' );
-print STDOUT "log: Loading features into DB\n";
+print STDOUT "log: Loading annotations into DB\n";
 bulk_index('features', \@features);
 print STDOUT "log: " . commify($loaded_annot) . " annotations loaded\n";
 
