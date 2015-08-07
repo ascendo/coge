@@ -2,7 +2,10 @@ package CoGe::Core::Features;
 
 BEGIN {
 	use Exporter 'import';
-	our @EXPORT_OK = qw( get_chromosome_count get_chromosomes get_feature get_features get_features_ids get_features_in_region get_total_chromosomes_length get_type_counts );
+	our @EXPORT_OK = qw( get_chromosome_count get_chromosomes get_feature 
+	   get_features get_features_ids get_features_in_region get_features_count 
+	   get_total_chromosomes_length get_type_counts
+	);
 }
 
 =head1 NAME
@@ -334,8 +337,10 @@ sub get_features {
     $query{'names.name'} = $name       if $name;
     $query{type}         = $type_id    if $type_id;
     $query{chromosome}   = $chromosome if defined $chromosome;
-    $query{start}        = $start      if $start;
-    $query{stop}         = $stop       if $stop;
+    if (defined $start && defined $stop) {
+        $query{start} = { 'lte' => $stop  };
+        $query{stop}  = { 'gte' => $start };
+    } 
     
     # Query options
     my %options;
@@ -396,18 +401,21 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_features_count {
-	my $e = Search::Elasticsearch->new();
-	return $e->count(
-		index => 'coge',
-		type => 'features',
-		body => {
-			query => {
-				filtered => {
-					filter => build_and_filter(shift)
-				}
-			}
-		}
-	)->{count};
+#	my $e = Search::Elasticsearch->new();
+#	return $e->count(
+#		index => 'coge',
+#		type => 'features',
+#		body => {
+#			query => {
+#				filtered => {
+#					filter => build_and_filter(shift)
+#				}
+#			}
+#		}
+#	)->{count};
+    my %query = @_;
+	my $result = get_features(\%query, { search_type => 'count' });
+	warn Dumper $result;
 }
 
 ################################################ subroutine header begin ##
@@ -460,7 +468,7 @@ sub get_features_in_region {
       || $opts{data_info_id}
       || $opts{DATA_INFO_ID};
     my $genome_id  = $opts{gid};
-#    my $count_flag = $opts{count} || $opts{COUNT};
+    my $count_flag = $opts{count} || $opts{COUNT};
     my $ftid       = $opts{ftid};
 
     if ( ref($ftid) =~ /array/i ) {
@@ -472,7 +480,7 @@ sub get_features_in_region {
         my $genome = CoGeX->dbconnect(get_defaults())->resultset('Genome')->find($genome_id);
         push @dsids, map { $_->id } $genome->datasets if $genome;
     }
-#    if ($count_flag) {
+    if ($count_flag) {
 #        return $self->resultset('Feature')->count(
 #            {
 #                "me.chromosome" => $chr,
@@ -504,8 +512,9 @@ sub get_features_in_region {
 #                #						   prefetch=>["locations", "feature_type"],
 #            }
 #        );
-		return get_features_count(chromosome => $chr, dataset => \@dsids, -and => [{start => { 'lte' => $stop}}, {stop => { 'gte' => $start }}]);
-#    }
+		return get_features_count( chromosome => $chr, dataset_id => \@dsids, start => $start, stop => $stop );
+    }
+    
 #    my %search = (
 #        "me.chromosome" => $chr,
 #        "me.dataset_id" => [@dsids],
@@ -540,8 +549,13 @@ sub get_features_in_region {
 #            #						     order_by=>"me.start",
 #        }
 #    );
-print STDERR "get_features_in_region\n";
-    my %search = (chromosome => $chr, dataset => \@dsids, -and => [{start => { 'lte' => $stop}}, {stop => { 'gte' => $start }}]);
+    print STDERR "get_features_in_region\n";
+    my %search = (
+        dataset_id => \@dsids, 
+        chromosome => $chr, 
+        start => $start,
+        stop => $stop
+    );
     $search{type} = $ftid if $ftid;
 	my $features =  get_features(%search);
 #    return wantarray ? @feats : \@feats;
