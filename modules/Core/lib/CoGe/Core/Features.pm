@@ -322,8 +322,7 @@ sub get_features {
     my $dataset_id = $opts{dataset_id}; # dataset id or array ref of ids
     my $name       = $opts{name};       # feature name or array ref of names
     my $type_id    = $opts{type_id};    # feature type id or array of ids
-    my $chr        = $opts{chr};
-       $chr        = $opts{chromosome} unless defined $chr;
+    my $chr        = $opts{chr} || $opts{chromosome};
     my $start      = $opts{start};
     my $stop       = $opts{stop};
     my $size       = $opts{size}; # max size of result set
