@@ -331,22 +331,23 @@ sub get_features {
     my $size       = $opts{size}; # max size of result set
     my $sort       = $opts{sort}; # optional sorting
     
-    # Query arguments
+    # Query parameters
     my %query;
     $query{dataset}      = $dataset_id if $dataset_id;
     $query{'names.name'} = $name       if $name;
     $query{type}         = $type_id    if $type_id;
     $query{chromosome}   = $chromosome if defined $chromosome;
-    if (defined $start && defined $stop) {
+    if (defined $start) {
+        $stop = $start unless defined $stop;
         $query{start} = { 'lte' => $stop  };
         $query{stop}  = { 'gte' => $start };
     } 
     
     # Query options
     my %options;
-    $options{size}         = $size       if $size;
-    $options{sort}         = $sort       if $sort;
-    $options{class}        = 'CoGe::Core::Feature';
+    $options{size}  = $size       if $size;
+    $options{sort}  = $sort       if $sort;
+    $options{class} = 'CoGe::Core::Feature';
     
     my @results = search('features', \%query, \%options);
     
