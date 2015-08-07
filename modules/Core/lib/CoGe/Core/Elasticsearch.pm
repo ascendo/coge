@@ -255,16 +255,24 @@ See Also   :
 sub search {
     my $type  = shift;
     my $query = shift;
-    my $class = shift; # optional class name to cast result
+    my $options = shift;
+    my $class = $options{class}; # optional class name to cast result
     return unless ($query && $type);
+    
     my ($url, $index) = _get_settings();
     
     # Build query
-    my $sb = ElasticSearch::SearchBuilder->new();
-    my $dsl = $sb->filter($query);
-    unless ($dsl) {
-        warn "Elasticsearch::search: ERROR: invalid query:\n", Dumper $query;
-        return;
+    my $dsl;
+    if ($query->{body}) { # literal query given
+        $dsl = $query->{body};
+    }
+    else { # use the query builder
+        my $sb = ElasticSearch::SearchBuilder->new();
+        $dsl = $sb->filter($query);
+        unless ($dsl) {
+            warn "Elasticsearch::search: ERROR: invalid query:\n", Dumper $query;
+            return;
+        }
     }
     warn Dumper $dsl if $DEBUG;
     
@@ -273,7 +281,8 @@ sub search {
     my $results = $es->search(
         index  => $index,
         type   => $type,
-        size   => $query->{size} || 1_000_000,
+        size   => $options->{size} || 1_000_000,
+        search_type => $options->{search_type} || 'query_then_fetch',
         body   => $dsl
     );
     unless ($results) {
@@ -282,7 +291,12 @@ sub search {
     }
     #warn Dumper $results if $DEBUG;
     
-    # Format results
+    # Return literal results if literal query
+    if ($query->{body}) {
+        return $results;
+    }
+    
+    # Otherwise, format results
     my @results;
     foreach (@{$results->{hits}->{hits}}) {
         my $result = $_->{_source};

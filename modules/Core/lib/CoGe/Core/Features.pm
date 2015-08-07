@@ -322,7 +322,7 @@ sub get_features {
     my $dataset_id = $opts{dataset_id}; # dataset id or array ref of ids
     my $name       = $opts{name};       # feature name or array ref of names
     my $type_id    = $opts{type_id};    # feature type id or array of ids
-    my $chr        = $opts{chr} || $opts{chromosome};
+    my $chromosome = $opts{chromosome} || $opts{chr};
     my $start      = $opts{start};
     my $stop       = $opts{stop};
     my $size       = $opts{size}; # max size of result set
@@ -333,15 +333,17 @@ sub get_features {
     $query{dataset}      = $dataset_id if $dataset_id;
     $query{'names.name'} = $name       if $name;
     $query{type}         = $type_id    if $type_id;
-    $query{chr}          = $chr        if defined $chr;
+    $query{chromosome}   = $chromosome if defined $chromosome;
     $query{start}        = $start      if $start;
     $query{stop}         = $stop       if $stop;
     
     # Query options
-    $query{size}         = $size       if $size;
-    $query{sort}         = $sort       if $sort;
+    my %options;
+    $options{size}         = $size       if $size;
+    $options{sort}         = $sort       if $sort;
+    $options{class}        = 'CoGe::Core::Feature';
     
-    my @results = search('features', \%query, 'CoGe::Core::Feature');
+    my @results = search('features', \%query, \%options);
     
     return wantarray ? @results : \@results;
 }
@@ -707,26 +709,47 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_type_counts {
-	my $e = Search::Elasticsearch->new();
-	my $results = $e->search(
-		index => 'coge',
-		type => 'features',
-		search_type => 'count',
-		body => {
-			query => {
-				filtered => {
-					filter => build_filter('dataset', shift)
-				}
-			},
-			aggs => {
-				count => {
-					terms => {
-						field => 'type'
-					}
-				}
-			}
-		}
-	);
+#	my $e = Search::Elasticsearch->new();
+#	my $results = $e->search(
+#		index => 'coge',
+#		type => 'features',
+#		search_type => 'count',
+#		body => {
+#			query => {
+#				filtered => {
+#					filter => build_filter('dataset', shift)
+#				}
+#			},
+#			aggs => {
+#				count => {
+#					terms => {
+#						field => 'type'
+#					}
+#				}
+#			}
+#		}
+#	);
+	
+	my $results = search('features',
+	    { body =>
+    	    {   query => {
+                    filtered => {
+                        filter => build_filter('dataset', shift)
+                    }
+                },
+                aggs => {
+                    count => {
+                        terms => {
+                            field => 'type'
+                        }
+                    }
+                }
+            }
+	    },
+        { search_type => 'count' }
+    );
+    warn Dumper $results;
+	
 	my %counts;
 	foreach (@{$results->{aggregations}->{count}->{buckets}}) {
 		$counts{$_->{key}} = $_->{doc_count};
