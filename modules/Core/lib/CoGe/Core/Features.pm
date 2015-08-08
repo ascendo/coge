@@ -203,9 +203,9 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_chromosome_count {
-	my $search = shift;
-	$search->{type} = 4; # 4 is the feature_type_id for chromosomes
-	return get_features_count($search);
+	my %opts = @_;
+	$opts{type_id} = 4; # 4 is the feature_type_id for chromosomes
+	return get_features_count(%opts);
 }
 
 ################################################ subroutine header begin ##
@@ -226,9 +226,9 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_chromosomes {
-	my $search = shift;
-	$search->{type_id} = 4; # 4 is the feature_type_id for chromosomes
-	return get_features($search, shift);
+	my %opts = @_;
+	$opts{type_id} = 4; # 4 is the feature_type_id for chromosomes
+	return get_features(%opts);
 }
 
 ################################################ subroutine header begin ##
@@ -322,34 +322,8 @@ See Also   :
 #}
 sub get_features {
     my %opts = @_;
-    my $dataset_id = $opts{dataset_id}; # dataset id or array ref of ids
-    my $name       = $opts{name};       # feature name or array ref of names
-    my $type_id    = $opts{type_id};    # feature type id or array of ids
-    my $chromosome = $opts{chromosome} || $opts{chr};
-    my $start      = $opts{start};
-    my $stop       = $opts{stop};
-    my $size       = $opts{size}; # max size of result set
-    my $sort       = $opts{sort}; # optional sorting
     
-    # Query parameters
-    my %query;
-    $query{dataset}      = $dataset_id if $dataset_id;
-    $query{'names.name'} = $name       if $name;
-    $query{type}         = $type_id    if $type_id;
-    $query{chromosome}   = $chromosome if defined $chromosome;
-    if (defined $start) {
-        $stop = $start unless defined $stop;
-        $query{start} = { 'lte' => $stop  };
-        $query{stop}  = { 'gte' => $start };
-    } 
-    
-    # Query options
-    my %options;
-    $options{size}  = $size       if $size;
-    $options{sort}  = $sort       if $sort;
-    $options{class} = 'CoGe::Core::Feature';
-    
-    my @results = search('features', \%query, \%options);
+    my @results = search('features', query(\%opts), options(\%opts));
     
     return wantarray ? @results : \@results;
 }
@@ -374,11 +348,12 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_features_ids {
-	my $search = shift;
-	my $json = elasticsearch_post('coge/features/_search', '{"query":{"filtered":{"filter":' . build_and_filter($search) . '}},"size":10000000}');
-	my $o = decode_json($json);
+	my %opts = @_;
+	my $options = options(\%opts);
+	$options->{search_type} = 'count';
+	my $results = search('features', { body => query(\%opts) }, $options);
 	my @ids;
-	foreach (@{$o->{hits}->{hits}}) {
+	foreach (@{$results->{hits}->{hits}}) {
 		push (@ids, $_->{_id});
 	}
 	return \@ids;
@@ -414,9 +389,12 @@ sub get_features_count {
 #			}
 #		}
 #	)->{count};
-    my %query = @_;
-	my $result = get_features(\%query, { search_type => 'count' });
-	warn Dumper $result;
+	my %opts = @_;
+	my $options = options(\%opts);
+	$options->{search_type} = 'count';
+	my $results = search('features', { body => query(\%opts) }, $options);
+print STDERR Dumper $results;
+	warn Dumper $results;
 }
 
 ################################################ subroutine header begin ##
@@ -749,6 +727,77 @@ sub get_type_counts {
 	}
 	
 	return \%counts;
+}
+
+################################################ subroutine header begin ##
+
+=head2 options
+
+ Usage     :
+ Purpose   :
+ Returns   : the options hash ref to pass to search
+ Argument  : hash ref of options for query
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub options {
+    my $opts = shift;
+    my $size       = $opts->{size}; # max size of result set
+    my $sort       = $opts->{sort}; # optional sorting
+    
+    # Query options
+    my %options;
+    $options{size}  = $size       if $size;
+    $options{sort}  = $sort       if $sort;
+    $options{class} = 'CoGe::Core::Feature';
+    
+    return \%options;
+}
+
+################################################ subroutine header begin ##
+
+=head2 query
+
+ Usage     :
+ Purpose   :
+ Returns   : the query hash ref to pass to search
+ Argument  : hash ref of things to query
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub query {
+    my $opts = shift;
+    my $dataset_id = $opts->{dataset_id}; # dataset id or array ref of ids
+    my $name       = $opts->{name};       # feature name or array ref of names
+    my $type_id    = $opts->{type_id};    # feature type id or array ref of ids
+    my $chromosome = $opts->{chromosome} || $opts->{chr};
+    my $start      = $opts->{start};
+    my $stop       = $opts->{stop};
+    
+    # Query parameters
+    my %query;
+    $query{dataset}      = $dataset_id if $dataset_id;
+    $query{'names.name'} = $name       if $name;
+    $query{type}         = $type_id    if $type_id;
+    $query{chromosome}   = $chromosome if defined $chromosome;
+    if (defined $start) {
+        $stop = $start unless defined $stop;
+        $query{start} = { 'lte' => $stop  };
+        $query{stop}  = { 'gte' => $start };
+    } 
+	return \%query;
 }
 
 1;

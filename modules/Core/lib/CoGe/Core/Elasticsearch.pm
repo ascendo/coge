@@ -1,6 +1,7 @@
 package CoGe::Core::Elasticsearch;
 
 use Data::Dumper;
+use Devel::StackTrace;
 use LWP::UserAgent;
 use Search::Elasticsearch;
 use ElasticSearch::SearchBuilder;
@@ -273,6 +274,8 @@ sub search {
         $dsl = $sb->filter($query);
         unless ($dsl) {
             warn "Elasticsearch::search: ERROR: invalid query:\n", Dumper $query;
+            my $trace = Devel::StackTrace->new;
+            warn $trace->as_string;
             return;
         }
     }

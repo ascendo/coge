@@ -475,7 +475,7 @@ See Also   :
 
 sub chromosome_count {
     my $self = shift;
-    return get_chromosome_count({dataset => $self->id});
+    return get_chromosome_count(dataset_id => $self->id);
 #    my %opts = @_;
 #    my $ftid = $opts{ftid};
 #    my $search;
@@ -554,9 +554,7 @@ sub chromosomes {
     #this query is faster if the feature_type_id of feature_type "chromosome" is known.
     #features of this type refer to the entire stored sequence which may be a fully
     #assembled chromosome, or a contig, supercontig, bac, etc.
-    my $search = {};
 #    my $search_type = { order_by => { -desc => 'stop' } };
-    my $search_type = { sort => { 'stop' => 'desc' } };
 #    if ($ftid) {
 #        $search->{feature_type_id} = $ftid;
 #    }
@@ -566,21 +564,22 @@ sub chromosomes {
 #    }
     
 #    if ($max && $self->features( $search, $search_type)->count() > $max ) {
-    if ($max && get_chromosome_count({dataset => $self->id}) > $max) {
+    if ($max && get_chromosome_count(dataset_id => $self->id) > $max) {
         return;
     }
 
+	my %query = (dataset_id => $self->id, sort => { 'stop' => 'desc' });
     if ($limit) {
 #        $search_type->{rows} = $limit;
-        $search_type->{size} = $limit;
+        $query{size} = $limit;
     }
     
     if ($length) {
 #        @data = $self->features( $search, $search_type );
-        @data = get_chromosomes({dataset => $self->id}, $search_type);
+        @data = get_chromosomes(%query);
     }
     else {
-        @data = map { $_->chromosome } $self->features($search, $search_type);
+        @data = map { $_->chromosome } get_chromosomes(%query);
     }
     unless (@data) {
         my %seen;
