@@ -227,6 +227,7 @@ sub get_feature_counts {
 		};
 	}
 
+    # Build html response
     my $gc_args;
     $gc_args .= "typeid: ";
     my $feat_list_string = "dsgid=$dsgid";
