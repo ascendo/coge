@@ -9,7 +9,7 @@ use CoGe::Accessory::LogUser;
 use CoGe::Accessory::Jex;
 use CoGe::Accessory::Web;
 use CoGe::Core::Notebook qw(notebookcmp);
-use CoGe::Core::Features qw(get_feature);
+use CoGe::Core::Features qw(get_feature get_features);
 use CGI;
 use JSON::XS;
 use HTML::Template;
@@ -596,33 +596,56 @@ sub get_genome_info { #FIXME: dup'ed in CoGeBlast.pl
 #    return $opts;
 #}
 
+# mdb added 8/5/15 ES migration - remove when ES features have type name
+sub get_type_name {
+    my $ftid = shift;
+    my $type = $coge->resultset('FeatureType')->find($ftid);
+    return '' unless $type;
+    return $type->name;
+}
+
 sub get_types {
     my %opts = @_;
-    #my ($dsid, $gstid) = split(/_/, $opts{dsid});
     my $dsgid = $opts{dsgid};
     my $accn  = $opts{accn};
     my $ftid  = $opts{ftid};
-    #print STDERR "get_types: dsgid=$dsgid accn=$accn ftid=$ftid\n";
+    #print STDERR "get_types: dsgid=$dsgid accn=$accn " . ($ftid ? "ftid=$ftid" : '') . "\n";
 
-    my $html;
-    my $blank = qq{<font class='small note'>(0)</font><br><SELECT id="type_name" size="10" style="min-width:60px"></SELECT>};#<input type="hidden" id="type_name">};
     my %seen;
-    my $search = {
-        'feature_names.name'           => $accn,
-        'dataset_connectors.genome_id' => $dsgid,
-    };
-    $search->{feature_type_id} = 3;
-
     my @opts =
       sort map { "<OPTION>$_</OPTION>" }
       grep     { !$seen{$_}++ }
       map      { $_->type->name }
           $coge->resultset('Feature')->search(
-            $search,
-            ,
+            {
+                'feature_names.name'           => $accn,
+                'dataset_connectors.genome_id' => $dsgid,
+                'feature_type_id'              => 3,
+            },
             { join => [ 'feature_names', { 'dataset' => 'dataset_connectors' } ] }
           );
+          
+    ######################### mdb added 8/5/15 ES migration
+    my $genome = $coge->resultset('Genome')->find($dsgid);
+    return unless ( $USER->has_access_to_genome($genome) );
 
+    my $rs = get_features(
+        dataset_id => $genome->dataset_ids,
+        name       => $accn,
+        type_id    => 3
+    );
+    
+    %seen = ();
+    my @opts2 = 
+        sort map { "<OPTION>$_</OPTION>" }
+        grep     { !$seen{$_}++ }
+        map      { get_type_name($_->{type}) } @$rs;
+    
+    use Array::Utils qw(array_diff);
+    warn "!!!!!!!!!MISMATCH get_types\n1:@opts\n2:@opts2\nrs:@$rs" if array_diff(@opts, @opts2);
+    #########################
+    
+    my $html;
     if (@opts) {
         $html .= "<font class='small note'>(" . scalar @opts . ")</font>\n<BR>\n"
             . qq{<SELECT id="type_name" size="10" style="min-width:60px" MULTIPLE }
@@ -632,14 +655,14 @@ sub get_types {
         $html =~ s/OPTION/OPTION SELECTED/;
     }
     else {
+        my $blank = qq{<font class='small note'>(0)</font><br><SELECT id="type_name" size="10" style="min-width:60px"></SELECT>};#<input type="hidden" id="type_name">};
         return encode_json({ html => $blank });
     }
-
-    #return $blank unless $html =~ /OPTION/;
+    
     return encode_json({ html => $html, dsgid => $dsgid });
 }
 
-sub search_lists {   # FIXME this coded is dup'ed in User.pl and NotebookView.pl and CoGeBlast.pl
+sub search_lists { # FIXME this coded is dup'ed in User.pl and NotebookView.pl and CoGeBlast.pl
     my %opts = @_;
     return if ( $USER->user_name eq 'public' );
     my $search_term = $opts{search_term};
@@ -810,7 +833,7 @@ sub get_anno {
     my $type  = $opts{type};
     my $dsgid = $opts{dsgid};
     return unless $accn || $fid;
-    print STDERR "get_anno: " . ($accn ? "accn=$accn " : '') . ($fid ? "fid=$fid " : '') . ($type ? "type=$type " : '') . "dsgid=$dsgid\n";
+    #print STDERR "get_anno: " . ($accn ? "accn=$accn " : '') . ($fid ? "fid=$fid " : '') . ($type ? "type=$type " : '') . "dsgid=$dsgid\n";
 
     my $genome = $coge->resultset('Genome')->find($dsgid);
     return unless ( $USER->has_access_to_genome($genome) );
