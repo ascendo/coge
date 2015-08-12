@@ -625,7 +625,7 @@ sub get_gc_dsg {
     my $dsg      = shift;
     my $length   = 0;
     my $gc_total = 0;
-    foreach my $chr ( $dsg->chromosomes ) {
+    foreach my $chr ( $dsg->chromosome_names ) {
         my ( $gc, $at, $n, $x ) = $dsg->percent_gc( count => 1, chr => $chr );
         $gc_total += $gc;
         $length   += ( $gc + $at + $n + $x );

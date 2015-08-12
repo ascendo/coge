@@ -206,7 +206,7 @@ sub process_sequence {
     $part_num = 1;
     $pos      = 1;
     foreach my $dsg ( values %dsg ) {
-        foreach my $chr ( $dsg->chromosomes ) {
+        foreach my $chr ( $dsg->chromosome_names ) {
             next if $in_chrs{ uc($chr) };
             if ($count) {
                 $seq .= "N" x $join;

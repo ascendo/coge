@@ -298,8 +298,7 @@ See Also   :
 sub datasets {
     my $self = shift;
     my %opts = @_;
-    my $chr  = $opts{chr};
-    $chr = $opts{chromosome} unless defined $chr;
+    my $chr  = $opts{chr} || $opts{chromosome};
     my $restricted = $opts{restricted};
 
     my %datasets;
@@ -739,7 +738,7 @@ sub type {
 
 ################################################ subroutine header begin ##
 
-=head2 chromosomes
+=head2 chromosome_names
 
  Usage     :
  Purpose   :
@@ -754,7 +753,7 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub chromosomes {
+sub chromosome_names {
     my $self = shift;
 	return CoGe::Core::Chromosomes->new($self->id)->names;
 }
@@ -836,7 +835,7 @@ sub percent_gc {
     my $length = 0;
 
     unless ($sent_chr) {
-        foreach my $chr ( $self->chromosomes ) {
+        foreach my $chr ( $self->chromosome_names ) {
             push @chr, $chr;
         }
     }
@@ -866,7 +865,7 @@ sub percent_gc {
             chr_name =>   fasta header contains only the chromosome name (default 0)
             start    =>  start position (default 1)
             stop     =>  stop position  (default $self->sequence_legnth($chr)
-            chr      =>  chromosome for which to get sequence (default:  whatever $self->chromosomes gets first)
+            chr      =>  chromosome for which to get sequence (default:  whatever $self->chromosome_names gets first)
             rc       =>  generate the reverse complement (default: 0)
             prot     =>  translate to protein, will do 6 frame automatically if it is not in a proper reading frame (default: 0)
 
@@ -890,7 +889,7 @@ sub fasta {
     $col = 100           unless defined $col;
     my $chr_name = $opts{chr_name};   #makes header contain only chromosome name
     my $chr      = $opts{chr};
-    ($chr) = $self->chromosomes unless defined $chr;
+    ($chr) = $self->chromosome_names unless defined $chr;
     my $strand = $opts{strand} || 1;
     my $start  = $opts{start}  || 1;
     $start = 1 if $start < 1;

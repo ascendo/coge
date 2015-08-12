@@ -731,7 +731,7 @@ sub get_dataset_info {
     my $chr_num = $ds->chromosome_count;
     my %chr;
     my $tmp_count = 0;
-    foreach my $c ( $ds->chromosomes( length => 1, limit => $MAX_NUM_CHROMOSOME_RESULTS, max => 1000 ) ) {
+    foreach my $c ( $ds->chromosomes( limit => $MAX_NUM_CHROMOSOME_RESULTS, max => 1000 ) ) {
 #        if (ref($c) =~ /CoGeX/ )
         if (ref($c) =~ /CoGe::Core::Feature/ )
          { $chr{$c->chromosome} = { length => $c->stop }; }
@@ -1096,7 +1096,7 @@ sub get_gc_for_feature_type {
     foreach my $item (@items) {
         map {
         	$seqs{$_} = $item->get_genomic_sequence( chr => $_, seq_type => $gstid )
-        } (defined $chr ? ($chr) : $item->chromosomes);
+        } (defined $chr ? ($chr) : $item->chromosome_names);
     }
 
     my $search = { "feature_type_id" => $typeid };
@@ -1246,7 +1246,7 @@ sub get_gc_for_chromosome {
             $chr{$chr} = 1;
         }
         else {
-            map { $chr{$_} = 1 } $ds->chromosomes;
+            map { $chr{$_} = 1 } $ds->chromosome_names;
         }
         foreach my $chr ( keys %chr ) {
             my @gc =
@@ -1306,7 +1306,7 @@ sub get_gc_for_noncoding {
     foreach my $item (@items) {
         map {
         	$seqs{$_} = $item->get_genomic_sequence( chr => $_, seq_type => $gstid )
-        } (defined $chr ? ($chr) : $item->chromosomes);
+        } (defined $chr ? ($chr) : $item->chromosome_names);
     }
 
     foreach my $ds (@datasets) {
@@ -1422,7 +1422,7 @@ sub get_codon_usage {
     foreach my $item (@items) {
         map {
         	$seqs{$_} = $item->get_genomic_sequence( chr => $_, seq_type => $gstid )
-        } (defined $chr ? ($chr) : $item->chromosomes);
+        } (defined $chr ? ($chr) : $item->chromosome_names);
     }
 
     my %codons;
@@ -1502,7 +1502,7 @@ sub get_aa_usage {
     foreach my $item (@items) {
         map {
         	$seqs{$_} = $item->get_genomic_sequence( chr => $_, seq_type => $gstid )
-        } (defined $chr ? ($chr) : $item->chromosomes);
+        } (defined $chr ? ($chr) : $item->chromosome_names);
     }
 
     my %codons;
@@ -1849,7 +1849,7 @@ sub get_total_length_for_ds {
     my $dsid   = $opts{dsid};
     my $ds     = $coge->resultset('Dataset')->find($dsid);
 #    my $length = 0;
-#    map { $length += $ds->last_chromosome_position($_) } $ds->chromosomes();
+#    map { $length += $ds->last_chromosome_position($_) } $ds->chromosome_names();
 #    return commify($length);
 	return commify($ds->total_length);
 }

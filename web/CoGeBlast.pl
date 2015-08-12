@@ -1688,7 +1688,7 @@ sub generate_fasta {
         $cogeweb->logfile );
     open( OUT, ">$file" ) || die "Can't open $file for writing: $!";
     foreach my $ds (@$dslist) {
-        foreach my $chr ( sort $ds->chromosomes ) {
+        foreach my $chr ( sort $ds->chromosome_names ) {
             my $title =
                 $ds->organism->name . " (v"
               . $ds->version . ") "

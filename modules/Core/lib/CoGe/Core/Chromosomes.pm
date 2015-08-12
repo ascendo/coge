@@ -228,11 +228,11 @@ See Also   :
 
 sub names {
 	my $self = shift;
-	my @a;
+	my @names;
 	while ($self->next) {
-		push @a, $self->name;
+		push @names, $self->name;
 	}
-    return wantarray ? @a : \@a;
+    return wantarray ? @names : \@names;
 }
 
 ################################################ subroutine header begin ##

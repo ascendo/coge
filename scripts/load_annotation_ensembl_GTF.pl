@@ -108,7 +108,7 @@ unless ($genome) {
 }
 
 # Get list of chromosomes for genome
-my %valid_chrs = map { $_ => 1 } $genome->chromosomes;
+my %valid_chrs = map { $_ => 1 } $genome->chromosome_names;
 
 # Some defaults to check for in names and annotations
 my @check_names = (

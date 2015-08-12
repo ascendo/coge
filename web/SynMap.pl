@@ -1073,7 +1073,7 @@ sub get_chr_types {
     my $plasmid  = 0;
     my $contig   = 0;
     my $scaffold = 0;
-    my @chromosomes = $dsg->chromosomes;
+    my @chromosomes = $dsg->chromosome_names;
     if ( @chromosomes > 100 ) {
         return ( 0, 1, 0 );
     }

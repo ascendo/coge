@@ -3,6 +3,7 @@ package CoGe::Core::Genome;
 use strict;
 use warnings;
 
+use Data::Dumper;
 use File::Spec::Functions;
 use Sort::Versions;
 
@@ -142,7 +143,7 @@ sub _generate_wobble_content {
 
     foreach my $ds ($genome->datasets()) {
 #        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
-        foreach my $feat ($ds->features({ type => 3 })) {
+        foreach my $feat ($ds->features( type_id => 3 )) {
             my @gc = $feat->wobble_content( counts => 1 );
             $gc = $gc[0] if $gc[0] && $gc[0] =~ /^\d+$/;
             $at = $gc[1] if $gc[1] && $gc[1] =~ /^\d+$/;
@@ -176,7 +177,7 @@ sub get_gc_stats {
     my $storage_path = _get_stats_file($genome->id);
 
     my $data = read($storage_path);
-    return $data->{gc} if defined $data->{gc};
+#    return $data->{gc} if defined $data->{gc};
 
     $data->{gc} = _generate_gc_stats($genome);
 
@@ -244,7 +245,7 @@ sub _generate_wobble_gc_diff {
 
     foreach my $ds ($genome->datasets) {
 #        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
-        foreach my $feat ($ds->features({ type => 3 })) {
+        foreach my $feat ($ds->features( type_id => 3 )) {
             my @wgc  = $feat->wobble_content();
             my @gc   = $feat->gc_content();
             my $diff = $gc[0] - $wgc[0] if defined $gc[0] && defined $wgc[0];
@@ -268,7 +269,7 @@ sub _generate_feature_type_gc {
     foreach my $item (@items) {
         map {
             $seqs{$_} = $item->get_genomic_sequence( chr => $_, seq_type => $gstid )
-        } $item->chromosomes;
+        } $item->chromosome_names;
     }
 
     my ($at, $gc, $n) = (0) x 3;
@@ -289,7 +290,7 @@ sub _generate_feature_type_gc {
 
     foreach my $ds ($genome->datasets) {
 #        my @feats = $ds->features(@params);
-        my @feats = $ds->features({ type => $typeid});
+        my @feats = $ds->features( type_id => $typeid);
 
         foreach my $feat (@feats) {
             my $seq = substr(
@@ -332,12 +333,10 @@ sub _generate_gc_stats {
     my $genome = shift;
     my $gstid = $genome->type->id;
 
-    my %chr;
     my ( $gc, $at, $n, $x ) = (0) x 4;
 
     foreach my $ds ($genome->datasets) {
-        map { $chr{$_} = 1 } $ds->chromosomes;
-
+	    my %chr = map { $_ => 1 } $ds->chromosome_names;
         foreach my $chr ( keys %chr ) {
             my @gc =
               $ds->percent_gc( chr => $chr, seq_type => $gstid, count => 1 );
@@ -371,12 +370,12 @@ sub _generate_noncoding_gc_stats {
     foreach my $item (@items) {
         map {
             $seqs{$_} = $item->get_genomic_sequence( chr => $_, seq_type => $gstid )
-        } $item->chromosomes;
+        } $item->chromosome_names;
     }
 
     foreach my $ds (@datasets) {
 #        foreach my $feat ($ds->features(@LOCATIONS_PREFETCH)) {
-        foreach my $feat ($ds->features({ type => 3 })) {
+        foreach my $feat ($ds->features( type_id => 3 )) {
             foreach my $loc ( $feat->locs ) {
                 if ( $loc->stop > length( $seqs{ $feat->chromosome } ) ) {
                     print STDERR "feature "

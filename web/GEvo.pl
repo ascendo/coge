@@ -2830,7 +2830,7 @@ sub get_obj_from_genome_db {
 
     }
     unless ($seq) {
-        ($chr) = $ds->chromosomes unless defined $chr;
+        ($chr) = $ds->chromosome_names unless defined $chr;
         my $tmp;
         ( $tmp, $seq_file ) = CoGe::Accessory::Web::check_taint($seq_file);
         unlink($seq_file);
@@ -4661,7 +4661,7 @@ qq{<span class="small">Genome: </span><SELECT name="dsgid$num" id="dsgid$num">};
     my $org  = $dsg->organism->name;
     my $oid  = $dsg->organism->id;
     my $type = $gst->name if $gst;
-    $chr = join( ", ", $dsg->chromosomes ) unless defined $chr;
+    $chr = join( ", ", $dsg->chromosome_names ) unless defined $chr;
 
 #    my $title = qq{<span class="link"><a class="link" href="OrganismView.pl?oid=$oid;dsgid=$dsgid" target=_new>$org $type (v$ver):</a></span> chr. $chr};
     my $title =

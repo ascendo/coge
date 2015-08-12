@@ -11,7 +11,7 @@ use CoGeX::Result::Feature;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::Utils qw( commify );
 use CoGe::Core::Feature;
-use CoGe::Core::Features qw( get_feature get_features_ids get_features_in_region );
+use CoGe::Core::Features qw( get_feature get_feature_ids get_features_in_region );
 
 use vars qw($P $PAGE_TITLE $PAGE_NAME
   $TEMPDIR $TEMPURL $USER $DATE $BASEFILE $coge $cogeweb $FORM %FUNCTION);
@@ -274,16 +274,16 @@ sub get_fids {
 	    return \@ids;
     }
 
-	my $search;
+	my %search;
     if (@dsids) {
 #		$search->{-or} = [ dataset_id => [@dsids] ];
-	    $search->{dataset} = \@dsids;
+	    $search{dataset_id} = \@dsids;
 	}
 #   $search->{feature_type_id} = $ftid if $ftid;
-	$search->{type} = $ftid if $ftid;
-	$search->{chromosome} = $chr  if $chr;
+	$search{type_id} = $ftid if $ftid;
+	$search{chromosome} = $chr  if $chr;
 #	@ids = map { $_->id } $coge->resultset('Feature')->search($search);
-	return get_features_ids($search);
+	return get_feature_ids(%search);
 }
 
 sub generate_table {

@@ -2,9 +2,10 @@ package CoGe::Core::Features;
 
 BEGIN {
 	use Exporter 'import';
-	our @EXPORT_OK = qw( get_chromosome_count get_chromosomes get_feature 
-	   get_features get_features_ids get_features_in_region get_features_count 
-	   get_total_chromosomes_length get_type_counts
+	our @EXPORT_OK =
+	  qw( chromosome_exists get_chromosome_count get_chromosome_names get_chromosomes get_feature
+	  get_features get_feature_ids get_features_in_region get_features_count
+	  get_total_chromosomes_length get_type_counts
 	);
 }
 
@@ -35,7 +36,7 @@ use strict;
 use warnings;
 
 use CoGe::Accessory::Web qw(get_defaults);
-use CoGe::Core::Elasticsearch qw(build_and_filter build_filter elasticsearch_get elasticsearch_post search get);
+use CoGe::Core::Elasticsearch qw(search get);
 use CoGeX;
 use Data::Dumper;
 use Encode qw(encode);
@@ -43,6 +44,29 @@ use JSON::XS;
 use Search::Elasticsearch;
 
 our $DEBUG = 1;
+
+################################################ subroutine header begin ##
+
+=head2 chromosome_exists
+
+ Usage     :
+ Purpose   :
+ Returns   : if the dataset contains the chromosome
+ Argument  : hash with dataset_id and chromosome
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub chromosome_exists {
+	my %opts = @_;
+	return search_exists( 'features',
+		{ dataset => $opts{dataset_id}, chromosome => $opts{chromosome} } );
+}
 
 ################################################ subroutine header begin ##
 
@@ -63,13 +87,15 @@ See Also   :
 
 sub copy {
 	my $dataset_id = shift;
-	my $index = shift || 'coge'; # optional index name
-	
-    my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
-    my $query = 'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature WHERE dataset_id=' . $dataset_id;
-    my $features = $dbh->prepare($query);
-    $features->execute;
-    copy_rows($features, $dbh, $index);
+	my $index = shift || 'coge';    # optional index name
+
+	my $dbh = CoGeX->dbconnect( get_defaults() )->storage->dbh;
+	my $query =
+'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature WHERE dataset_id='
+	  . $dataset_id;
+	my $features = $dbh->prepare($query);
+	$features->execute;
+	copy_rows( $features, $dbh, $index );
 }
 
 ################################################ subroutine header begin ##
@@ -92,34 +118,36 @@ See Also   :
 
 sub copy_rows {
 	my $features = shift;
-	my $dbh = shift;
-	my $index = shift || 'coge'; # optional index name
-	my $e = Search::Elasticsearch->new();
-	
-    while (my $feature = $features->fetchrow_arrayref) {
-    	my $feature_id = $feature->[0];
-    	my $body = { type => int $feature->[1], dataset => int $feature->[2] };
-		if ($feature->[3]) {
+	my $dbh      = shift;
+	my $index    = shift || 'coge';                # optional index name
+	my $e        = Search::Elasticsearch->new();
+
+	while ( my $feature = $features->fetchrow_arrayref ) {
+		my $feature_id = $feature->[0];
+		my $body = { type => int $feature->[1], dataset => int $feature->[2] };
+		if ( $feature->[3] ) {
 			$body->{start} = int $feature->[3];
 		}
-		if ($feature->[4]) {
+		if ( $feature->[4] ) {
 			$body->{stop} = int $feature->[4];
 		}
-		if ($feature->[5]) {
+		if ( $feature->[5] ) {
 			$body->{strand} = int $feature->[5];
 		}
-		if ($feature->[6]) {
+		if ( $feature->[6] ) {
 			$body->{chromosome} = $feature->[6];
 		}
-	    my $db_names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id=' . $feature_id);
-	    $db_names->execute;
-	    my $names;
-	    while (my $db_name = $db_names->fetchrow_arrayref) {
-	    	my $name = { name => $db_name->[0]};
-			if ($db_name->[1]) {
+		my $db_names = $dbh->prepare(
+'SELECT name,description,primary_name FROM feature_name WHERE feature_id='
+			  . $feature_id );
+		$db_names->execute;
+		my $names;
+		while ( my $db_name = $db_names->fetchrow_arrayref ) {
+			my $name = { name => $db_name->[0] };
+			if ( $db_name->[1] ) {
 				$name->{description} = $db_name->[1];
 			}
-			if ($db_name->[2]) {
+			if ( $db_name->[2] ) {
 				$name->{primary} = 1;
 			}
 			push @$names, $name;
@@ -127,21 +155,34 @@ sub copy_rows {
 		if ($names) {
 			$body->{names} = $names;
 		}
-	    my $db_locations = $dbh->prepare('SELECT start,stop,strand,chromosome FROM location WHERE feature_id=' . $feature_id);
-	    $db_locations->execute;
-	    my $locations;
-	    while (my $db_location = $db_locations->fetchrow_arrayref) {
-			push @$locations, { start => int $db_location->[0], stop => int $db_location->[1], strand => int $db_location->[2], chromosome => $db_location->[3] };
+		my $db_locations = $dbh->prepare(
+'SELECT start,stop,strand,chromosome FROM location WHERE feature_id='
+			  . $feature_id );
+		$db_locations->execute;
+		my $locations;
+		while ( my $db_location = $db_locations->fetchrow_arrayref ) {
+			push @$locations,
+			  {
+				start      => int $db_location->[0],
+				stop       => int $db_location->[1],
+				strand     => int $db_location->[2],
+				chromosome => $db_location->[3]
+			  };
 		}
 		if ($locations) {
 			$body->{locations} = $locations;
 		}
-	    my $db_annotations = $dbh->prepare('SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id=' . $feature_id);
-	    $db_annotations->execute;
-	    my $annotations;
-	    while (my $db_annotation = $db_annotations->fetchrow_arrayref) {
-			my $annotation = { annotation => $db_annotation->[0], type => int $db_annotation->[1] };
-			if ($db_annotation->[2]) {
+		my $db_annotations = $dbh->prepare(
+'SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id='
+			  . $feature_id );
+		$db_annotations->execute;
+		my $annotations;
+		while ( my $db_annotation = $db_annotations->fetchrow_arrayref ) {
+			my $annotation = {
+				annotation => $db_annotation->[0],
+				type       => int $db_annotation->[1]
+			};
+			if ( $db_annotation->[2] ) {
 				$annotation->{link} = $annotation->[2];
 			}
 			push @$annotations, $annotation;
@@ -150,8 +191,13 @@ sub copy_rows {
 			$body->{annotations} = $annotations;
 		}
 		print $feature_id . ' ';
-		
-		$e->index( index => $index, type => 'features', id => $feature_id, body => $body );
+
+		$e->index(
+			index => $index,
+			type  => 'features',
+			id    => $feature_id,
+			body  => $body
+		);
 	}
 }
 
@@ -173,16 +219,18 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub dump {
-	my $limit = shift;
+	my $limit  = shift;
 	my $offset = shift;
-    my $dbh = CoGeX->dbconnect(get_defaults())->storage->dbh;
-    my $query = 'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature LIMIT ' . $limit;
-    if ($offset) {
-    	$query .= ' OFFSET ' . $offset;
-    }
-    my $features = $dbh->prepare($query);
-    $features->execute;
-    copy_rows($features, $dbh);
+	my $dbh    = CoGeX->dbconnect( get_defaults() )->storage->dbh;
+	my $query =
+'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature LIMIT '
+	  . $limit;
+	if ($offset) {
+		$query .= ' OFFSET ' . $offset;
+	}
+	my $features = $dbh->prepare($query);
+	$features->execute;
+	copy_rows( $features, $dbh );
 }
 
 ################################################ subroutine header begin ##
@@ -192,7 +240,7 @@ sub dump {
  Usage     :
  Purpose   :
  Returns   : the number of chromosome features for the dataset
- Argument  : search hash, must contain at least dataset => id of the dataset
+ Argument  : search hash, must contain at least dataset_id => id of the dataset
  Throws    :
  Comments  :
 
@@ -204,8 +252,50 @@ See Also   :
 
 sub get_chromosome_count {
 	my %opts = @_;
-	$opts{type_id} = 4; # 4 is the feature_type_id for chromosomes
+	$opts{type_id} = 4;
 	return get_features_count(%opts);
+}
+
+################################################ subroutine header begin ##
+
+=head2 get_chromosome_names
+
+ Usage     :
+ Purpose   :
+ Returns   : array of the chromosome names for the dataset
+ Argument  : search hash, must contain at least dataset_id => id of the dataset
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub get_chromosome_names {
+	my %opts  = @_;
+	my $query = query( \%opts );
+	$query->{type} = 4;
+	my $options = options( \%opts );
+	$options->{_source} = 'chromosome';
+	my $results = search( 'features', $query, $options );
+	my @chromosome_names;
+	if ( $results->{hits}->{total} ) {
+
+		foreach ( @{ $results->{hits}->{hits} } ) {
+			push @chromosome_names, $_->{_source}->{chromosome};
+		}
+	}
+	else {    # gather chromosome names from all features since none have type 4
+		$options->{_source} = 0;
+		$options->{args} = { count => { terms => { field => 'chromosome' } } };
+		$results = search( 'features', $query, $options );
+		foreach ( @{ $results->{aggregations}->{count}->{buckets} } ) {
+			push @chromosome_names, $_->{key};
+		}
+	}
+	return wantarray ? @chromosome_names : \@chromosome_names;
 }
 
 ################################################ subroutine header begin ##
@@ -215,7 +305,7 @@ sub get_chromosome_count {
  Usage     :
  Purpose   :
  Returns   : array of the chromosome features for the dataset
- Argument  : search hash, must contain at least dataset => id of the dataset
+ Argument  : search hash, must contain at least dataset_id => id of the dataset
  Throws    :
  Comments  :
 
@@ -227,7 +317,7 @@ See Also   :
 
 sub get_chromosomes {
 	my %opts = @_;
-	$opts{type_id} = 4; # 4 is the feature_type_id for chromosomes
+	$opts{type_id} = 4;    # 4 is the feature_type_id for chromosomes
 	return get_features(%opts);
 }
 
@@ -248,18 +338,9 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-#sub get_feature {
-#	my $id = shift;
-#	my $index = shift || 'coge'; # optional index name
-#	
-#	my $json = elasticsearch_get($index . '/features/' . $id . '/_source');
-#	my $feature = decode_json($json);
-#	$feature->{id} = $id;
-#	return bless($feature, 'CoGe::Core::Feature');
-#}
 sub get_feature {
-    my $id = shift;
-    return get('features', $id, 'CoGe::Core::Feature');
+	my $id = shift;
+	return get( 'features', $id, 'CoGe::Core::Feature' );
 }
 
 ################################################ subroutine header begin ##
@@ -283,54 +364,24 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-#sub get_features {
-#	my $search = shift;
-#	my $options = shift;
-#	my $index = shift || 'coge'; # optional index name
-#	my $body = {
-#		query => {
-#			filtered => {
-#				filter => build_and_filter($search)
-#			}
-#		},
-#		size => 10000000
-#	};
-#	if ($options) {
-#		$body->{size} = $options->{size} if $options->{size};
-#		$body->{sort} = $options->{sort} if $options->{sort};
-#	}
-#    
-#	my $e = Search::Elasticsearch->new(nodes => 'localhost:9200');
-#	my $results = $e->search(
-#		index => $index,
-#		type => 'features',
-#		scroll => '1m',
-#		body => $body
-#	);
-#	
-#	my @hits;
-#	foreach (@{$results->{hits}->{hits}}) {
-#		my $feature = $_->{_source};
-#		$feature->{id} = $_->{_id};
-#		push(@hits, bless($feature, 'CoGe::Core::Feature'));
-#	}
-#	if (!@hits && $DEBUG) {
-#		print STDERR 'no hits for query: ' . Dumper \$body;
-#	}
-#	
-#	return wantarray ? @hits : \@hits;
-#}
 sub get_features {
-    my %opts = @_;
-    
-    my @results = search('features', query(\%opts), options(\%opts));
-    
-    return wantarray ? @results : \@results;
+	my %opts = @_;
+
+	my $results = search( 'features', query( \%opts ), options( \%opts ) );
+
+	my @results;
+	foreach ( @{ $results->{hits}->{hits} } ) {
+		my $result = $_->{_source};
+		$result->{id} = $_->{_id};
+		bless( $result, 'CoGe::Core::Feature' );
+		push @results, $result;
+	}
+	return wantarray ? @results : \@results;
 }
 
 ################################################ subroutine header begin ##
 
-=head2 get_features_ids
+=head2 get_feature_ids
 
  Usage     : 
  Purpose   : 
@@ -347,14 +398,14 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub get_features_ids {
-	my %opts = @_;
-	my $options = options(\%opts);
-	$options->{search_type} = 'count';
-	my $results = search('features', { body => query(\%opts) }, $options);
+sub get_feature_ids {
+	my %opts    = @_;
+	my $options = options( \%opts );
+	$options->{_source} = 0;
+	my $results = search( 'features', query( \%opts ), $options );
 	my @ids;
-	foreach (@{$results->{hits}->{hits}}) {
-		push (@ids, $_->{_id});
+	foreach ( @{ $results->{hits}->{hits} } ) {
+		push( @ids, $_->{_id} );
 	}
 	return \@ids;
 }
@@ -366,7 +417,7 @@ sub get_features_ids {
  Usage     :
  Purpose   :
  Returns   : the number of features of the passed in type for the dataset
- Argument  : search hash, must contain at least dataset => id of the dataset
+ Argument  : search hash, must contain at least dataset_id => id of the dataset
  Throws    :
  Comments  :
 
@@ -377,23 +428,11 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_features_count {
-#	my $e = Search::Elasticsearch->new();
-#	return $e->count(
-#		index => 'coge',
-#		type => 'features',
-#		body => {
-#			query => {
-#				filtered => {
-#					filter => build_and_filter(shift)
-#				}
-#			}
-#		}
-#	)->{count};
-	my %opts = @_;
-	my $options = options(\%opts);
+	my %opts    = @_;
+	my $options = options( \%opts );
 	$options->{search_type} = 'count';
-	my $results = search('features', { body => query(\%opts) }, $options);
-print STDERR Dumper $results;
+	my $results = search( 'features', query( \%opts ), $options );
+	warn "get_features_count";
 	warn Dumper $results;
 }
 
@@ -428,117 +467,126 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_features_in_region {
-    my %opts = @_;
-    my $start =
-         $opts{'start'}
-      || $opts{'START'}
-      || $opts{begin}
-      || $opts{BEGIN};
-    $start = 1 unless $start;
-    my $stop = $opts{'stop'} || $opts{STOP} || $opts{end} || $opts{END};
-    $stop = $start unless defined $stop;
-    my $chr = $opts{chr};
-    $chr = $opts{chromosome} unless defined $chr;
-    my $dataset_id =
-         $opts{dataset}
-      || $opts{dataset_id}
-      || $opts{info_id}
-      || $opts{INFO_ID}
-      || $opts{data_info_id}
-      || $opts{DATA_INFO_ID};
-    my $genome_id  = $opts{gid};
-    my $count_flag = $opts{count} || $opts{COUNT};
-    my $ftid       = $opts{ftid};
+	my %opts = @_;
+	my $start =
+	     $opts{'start'}
+	  || $opts{'START'}
+	  || $opts{begin}
+	  || $opts{BEGIN};
+	$start = 1 unless $start;
+	my $stop = $opts{'stop'} || $opts{STOP} || $opts{end} || $opts{END};
+	$stop = $start unless defined $stop;
+	my $chr = $opts{chr};
+	$chr = $opts{chromosome} unless defined $chr;
+	my $dataset_id =
+	     $opts{dataset}
+	  || $opts{dataset_id}
+	  || $opts{info_id}
+	  || $opts{INFO_ID}
+	  || $opts{data_info_id}
+	  || $opts{DATA_INFO_ID};
+	my $genome_id  = $opts{gid};
+	my $count_flag = $opts{count} || $opts{COUNT};
+	my $ftid       = $opts{ftid};
 
-    if ( ref($ftid) =~ /array/i ) {
-        $ftid = undef unless @$ftid;
-    }
-    my @dsids;
-    push @dsids, $dataset_id if $dataset_id;
-    if ($genome_id) {
-        my $genome = CoGeX->dbconnect(get_defaults())->resultset('Genome')->find($genome_id);
-        push @dsids, map { $_->id } $genome->datasets if $genome;
-    }
-    if ($count_flag) {
-#        return $self->resultset('Feature')->count(
-#            {
-#                "me.chromosome" => $chr,
-#                "me.dataset_id" => [@dsids],
-#                -and            => [
-#                    "me.start" => { "<=" => $stop },
-#                    "me.stop"  => { ">=" => $start },
-#                ],
-#
-#                #  -and=>[
-#                # 	  -or=>[
-#                # 		-and=>[
-#                # 		       "me.stop"=>  {"<=" => $stop},
-#                # 		       "me.stop"=> {">=" => $start},
-#                # 		      ],
-#                # 		-and=>[
-#                # 		       "me.start"=>  {"<=" => $stop},
-#                # 		       "me.start"=> {">=" => $start},
-#                # 		      ],
-#                # 		-and=>[
-#                # 		       "me.start"=>  {"<=" => $start},
-#                # 		       "me.stop"=> {">=" => $stop},
-#                # 		      ],
-#                # 	       ],
-#                # 	 ],
-#            },
-#            {
-#
-#                #						   prefetch=>["locations", "feature_type"],
-#            }
-#        );
-		return get_features_count( chromosome => $chr, dataset_id => \@dsids, start => $start, stop => $stop );
-    }
-    
-#    my %search = (
-#        "me.chromosome" => $chr,
-#        "me.dataset_id" => [@dsids],
-#        -and            => [
-#            "me.start" => { "<=" => $stop },
-#            "me.stop"  => { ">=" => $start },
-#        ],
-#
-#        # -and=>[
-#        # 	-or=>[
-#        # 	      -and=>[
-#        # 		     "me.stop"=>  {"<=" => $stop},
-#        # 		     "me.stop"=> {">=" => $start},
-#        # 		    ],
-#        # 	      -and=>[
-#        # 		     "me.start"=>  {"<=" => $stop},
-#        # 		     "me.start"=> {">=" => $start},
-#        # 		    ],
-#        # 	      -and=>[
-#        # 		     "me.start"=>  {"<=" => $start},
-#        # 		     "me.stop"=> {">=" => $stop},
-#        # 		    ],
-#        # 	     ],
-#        #      ]
-#    );
-#    $search{"me.feature_type_id"} = { "IN" => $ftid } if $ftid;
-#    my @feats = $self->resultset('Feature')->search(
-#        \%search,
-#        {
-#
-#            #					     prefetch=>["locations", "feature_type"],
-#            #						     order_by=>"me.start",
-#        }
-#    );
-    print STDERR "get_features_in_region\n";
-    my %search = (
-        dataset_id => \@dsids, 
-        chromosome => $chr, 
-        start => $start,
-        stop => $stop
-    );
-    $search{type} = $ftid if $ftid;
-	my $features =  get_features(%search);
-#    return wantarray ? @feats : \@feats;
-    return wantarray ? @{$features} : $features;
+	if ( ref($ftid) =~ /array/i ) {
+		$ftid = undef unless @$ftid;
+	}
+	my @dsids;
+	push @dsids, $dataset_id if $dataset_id;
+	if ($genome_id) {
+		my $genome =
+		  CoGeX->dbconnect( get_defaults() )->resultset('Genome')
+		  ->find($genome_id);
+		push @dsids, map { $_->id } $genome->datasets if $genome;
+	}
+	if ($count_flag) {
+
+		#        return $self->resultset('Feature')->count(
+		#            {
+		#                "me.chromosome" => $chr,
+		#                "me.dataset_id" => [@dsids],
+		#                -and            => [
+		#                    "me.start" => { "<=" => $stop },
+		#                    "me.stop"  => { ">=" => $start },
+		#                ],
+		#
+		#                #  -and=>[
+		#                # 	  -or=>[
+		#                # 		-and=>[
+		#                # 		       "me.stop"=>  {"<=" => $stop},
+		#                # 		       "me.stop"=> {">=" => $start},
+		#                # 		      ],
+		#                # 		-and=>[
+		#                # 		       "me.start"=>  {"<=" => $stop},
+		#                # 		       "me.start"=> {">=" => $start},
+		#                # 		      ],
+		#                # 		-and=>[
+		#                # 		       "me.start"=>  {"<=" => $start},
+		#                # 		       "me.stop"=> {">=" => $stop},
+		#                # 		      ],
+		#                # 	       ],
+		#                # 	 ],
+		#            },
+		#            {
+		#
+		#                #						   prefetch=>["locations", "feature_type"],
+		#            }
+		#        );
+		return get_features_count(
+			chromosome => $chr,
+			dataset_id => \@dsids,
+			start      => $start,
+			stop       => $stop
+		);
+	}
+
+	#    my %search = (
+	#        "me.chromosome" => $chr,
+	#        "me.dataset_id" => [@dsids],
+	#        -and            => [
+	#            "me.start" => { "<=" => $stop },
+	#            "me.stop"  => { ">=" => $start },
+	#        ],
+	#
+	#        # -and=>[
+	#        # 	-or=>[
+	#        # 	      -and=>[
+	#        # 		     "me.stop"=>  {"<=" => $stop},
+	#        # 		     "me.stop"=> {">=" => $start},
+	#        # 		    ],
+	#        # 	      -and=>[
+	#        # 		     "me.start"=>  {"<=" => $stop},
+	#        # 		     "me.start"=> {">=" => $start},
+	#        # 		    ],
+	#        # 	      -and=>[
+	#        # 		     "me.start"=>  {"<=" => $start},
+	#        # 		     "me.stop"=> {">=" => $stop},
+	#        # 		    ],
+	#        # 	     ],
+	#        #      ]
+	#    );
+	#    $search{"me.feature_type_id"} = { "IN" => $ftid } if $ftid;
+	#    my @feats = $self->resultset('Feature')->search(
+	#        \%search,
+	#        {
+	#
+	#            #					     prefetch=>["locations", "feature_type"],
+	#            #						     order_by=>"me.start",
+	#        }
+	#    );
+	print STDERR "get_features_in_region\n";
+	my %search = (
+		dataset_id => \@dsids,
+		chromosome => $chr,
+		start      => $start,
+		stop       => $stop
+	);
+	$search{type} = $ftid if $ftid;
+	my $features = get_features(%search);
+
+	#    return wantarray ? @feats : \@feats;
+	return wantarray ? @{$features} : $features;
 }
 
 # apparently not used
@@ -657,28 +705,12 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_total_chromosomes_length {
-	my $e = Search::Elasticsearch->new();
-	my $results = $e->search(
-		index => 'coge',
-		type => 'features',
-		body => {
-			query => {
-				filtered => {
-					filter => {
-						and => [
-							{ term => { dataset => shift } },
-							{ term => { type => 4 } } # 4 is feature_type_id of chromosomes
-						]
-					}
-				}
-			},
-			aggs => {
-				length => {
-					sum => {
-						field => 'stop'
-					}
-				}
-			}
+	my $results = search(
+		'features',
+		{ dataset => shift, type => 4 },
+		{
+			aggs        => { length => { sum => { field => 'stop' } } },
+			search_type => 'count'
 		}
 	);
 	return $results->{aggregations}->{length}->{value};
@@ -702,30 +734,18 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_type_counts {
-	my $results = search('features',
-	    { body =>
-    	    {   query => {
-                    filtered => {
-                        filter => build_filter('dataset', shift)
-                    }
-                },
-                aggs => {
-                    count => {
-                        terms => {
-                            field => 'type'
-                        }
-                    }
-                }
-            }
-	    },
-        { search_type => 'count' }
-    );
-	
+	my $results = search(
+		'features',
+		{ dataset => shift },
+		{
+			aggs        => { count => { terms => { field => 'type' } } },
+			search_type => 'count'
+		}
+	);
 	my %counts;
-	foreach (@{$results->{aggregations}->{count}->{buckets}}) {
-		$counts{$_->{key}} = $_->{doc_count};
+	foreach ( @{ $results->{aggregations}->{count}->{buckets} } ) {
+		$counts{ $_->{key} } = $_->{doc_count};
 	}
-	
 	return \%counts;
 }
 
@@ -747,17 +767,15 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub options {
-    my $opts = shift;
-    my $size       = $opts->{size}; # max size of result set
-    my $sort       = $opts->{sort}; # optional sorting
-    
-    # Query options
-    my %options;
-    $options{size}  = $size       if $size;
-    $options{sort}  = $sort       if $sort;
-    $options{class} = 'CoGe::Core::Feature';
-    
-    return \%options;
+	my $opts   = shift;
+	my $size   = $opts->{size};      # max size of result set
+	my $sort   = $opts->{sort};      # optional sorting
+	my $source = $opts->{_source};
+	my %options;
+	$options{size}    = $size   if $size;
+	$options{sort}    = $sort   if $sort;
+	$options{_source} = $source if $source;
+	return \%options;
 }
 
 ################################################ subroutine header begin ##
@@ -778,25 +796,24 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub query {
-    my $opts = shift;
-    my $dataset_id = $opts->{dataset_id}; # dataset id or array ref of ids
-    my $name       = $opts->{name};       # feature name or array ref of names
-    my $type_id    = $opts->{type_id};    # feature type id or array ref of ids
-    my $chromosome = $opts->{chromosome} || $opts->{chr};
-    my $start      = $opts->{start};
-    my $stop       = $opts->{stop};
-    
-    # Query parameters
-    my %query;
-    $query{dataset}      = $dataset_id if $dataset_id;
-    $query{'names.name'} = $name       if $name;
-    $query{type}         = $type_id    if $type_id;
-    $query{chromosome}   = $chromosome if defined $chromosome;
-    if (defined $start) {
-        $stop = $start unless defined $stop;
-        $query{start} = { 'lte' => $stop  };
-        $query{stop}  = { 'gte' => $start };
-    } 
+	my $opts       = shift;
+	my $dataset_id = $opts->{dataset_id};  # dataset id or array ref of ids
+	my $name       = $opts->{name};        # feature name or array ref of names
+	my $type_id    = $opts->{type_id};     # feature type id or array ref of ids
+	my $chromosome = $opts->{chromosome} || $opts->{chr};
+	my $start      = $opts->{start};
+	my $stop       = $opts->{stop};
+	my %query;
+	$query{dataset}      = $dataset_id if $dataset_id;
+	$query{'names.name'} = $name       if $name;
+	$query{type}         = $type_id    if $type_id;
+	$query{chromosome}   = $chromosome if defined $chromosome;
+
+	if ( defined $start ) {
+		$stop = $start unless defined $stop;
+		$query{start} = { 'lte' => $stop };
+		$query{stop}  = { 'gte' => $start };
+	}
 	return \%query;
 }
 

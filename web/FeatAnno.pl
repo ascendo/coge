@@ -105,11 +105,11 @@ sub gen_html {
       ) #there can be additional information about a chromosome for a particular version of the organism that is not in the same data_information.  Let's go find the organism_id and version for the specified data information item.
     {
         $version = $ds->version unless $version;
-        ($chr) = $ds->chromosomes() unless $chr;
+        ($chr) = $ds->chromosome_names unless $chr;
     }
     if ($dsg) {
         $version = $dsg->version unless $version;
-        ($chr) = $dsg->chromosomes() unless ($chr);
+        ($chr) = $dsg->chromosome_names unless ($chr);
     }
     my @all_feats;
     foreach my $item (@ds) {

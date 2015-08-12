@@ -81,9 +81,9 @@ sub main {
 
     my %chr2ds;
     foreach my $ds ( $dsg->datasets ) {
-        map { $chr2ds{$_} = $ds } $ds->chromosomes;
+        map { $chr2ds{$_} = $ds } $ds->chromosome_names;
     }
-    foreach my $chr ( sort { versioncmp( $a, $b ) } $dsg->chromosomes ) {
+    foreach my $chr ( sort { versioncmp( $a, $b ) } $dsg->chromosome_names ) {
         print $fh ">Features $chr\n";
         foreach my $feat (
             sort {

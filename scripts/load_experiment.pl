@@ -206,7 +206,7 @@ unless ($genome) {
 }
 
 # Hash chromosome names
-my %genome_chr = map { $_ => 1 } $genome->chromosomes;
+my %genome_chr = map { $_ => 1 } $genome->chromosome_names;
 
 # Validate the data file
 print STDOUT "log: Validating data file\n";
