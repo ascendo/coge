@@ -4,6 +4,8 @@ use CoGeX;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::genetic_code;
 use CoGe::Accessory::Utils qw( get_link_coords );
+use CoGe::Core::Features qw(get_feature get_features);
+use CoGe::Core::Organism qw(search_organisms);
 use CGI;
 use CGI::Carp 'fatalsToBrowser';
 use CGI::Ajax;
@@ -61,26 +63,44 @@ sub gen_data {
     return qq{<font class="loading">$message. . .</font>};
 }
 
-sub get_types {
+# mdb added 8/5/15 ES migration - remove when ES features have type name
+sub get_type_name {
+    my $ftid = shift;
+    my $type = $coge->resultset('FeatureType')->find($ftid);
+    return '' unless $type;
+    return $type->name;
+}
+
+sub get_types { #FIXME dup'ed in SynFind.pl, move into Core::Features
     my %opts = @_;
-    my ( $dsid, $gstid ) = split /_/, $opts{dsid};
+    my ( $dsid, $gstid ) = split(/_/, $opts{dsid});
     my $accn = $opts{accn};
     my $ftid = $opts{ftid};
     
-    my $html;
     my %seen;
-    my $search = {
-        'feature_names.name' => $accn,
-        dataset_id           => $dsid,
-    };
-    $search->{feature_type_id} = $ftid if $ftid;
-    
-    my @opts =
-      sort map { "<OPTION>$_</OPTION>" }
-      grep     { !$seen{$_}++ }
-      map      { $_->type->name }
-      $coge->resultset('Feature')->search( $search,, { join => 'feature_names' } );
+# mdb removed 8/11/15 - ES migration
+#    my $search = {
+#        'feature_names.name' => $accn,
+#        dataset_id           => $dsid,
+#    };
+#    $search->{feature_type_id} = $ftid if $ftid;
+#    my @opts =
+#      sort map { "<OPTION>$_</OPTION>" }
+#      grep     { !$seen{$_}++ }
+#      map      { $_->type->name }
+#      $coge->resultset('Feature')->search( $search,, { join => 'feature_names' } );
 
+    # mdb added 8/11/15 - ES migration
+    my $rs = get_features(
+        dataset_id => $dsid,
+        name       => $accn
+    );
+    my @opts = 
+        sort map { "<OPTION>$_</OPTION>" }
+        grep     { !$seen{$_}++ }
+        map      { get_type_name($_->{type}) } @$rs;
+
+    my $html;
     if (@opts) {
         $html .= "<font class=small>Type count: " . scalar @opts . "</font>\n<BR>\n";
         $html .= qq{<SELECT id="Type_name" SIZE="10" MULTIPLE onChange="get_anno(['args__accn','accn_select','args__type','Type_name', 'args__dsid','dsid', 'args__gstid','args__$gstid'],[show_anno])" >\n};
@@ -138,11 +158,12 @@ sub cogesearch {
     $org_desc = undef if $org_desc =~ /^search$/i;
     my $blank      = qq{<input type="hidden" id="accn_select">};
     my $weak_query = "Query needs to be better defined.";
+    print STDERR Dumper \%opts, "\n";
 
     if ( !$accn && !$anno && !$fid ) {
         return $weak_query . $blank unless $org_id && $type;
     }
-    my $html;
+    
     my %seen;
     my $search = {};
     $search->{feature_type_id} = $type if $type;
@@ -151,8 +172,7 @@ sub cogesearch {
       if $org_desc;
     my $join = {
         join => [
-            {
-                'feature' => {
+            {   'feature' => {
                     'dataset' =>
                       { 'dataset_connectors' => { 'genome' => 'organism' } }
                 }
@@ -169,15 +189,14 @@ sub cogesearch {
         push @names, $coge->resultset('FeatureName')->search( $search1, $join );
         unless (@names) {
             push @names,
-              $coge->resultset('FeatureName')->search( $search, $join )
-              ->search_literal( 'MATCH(me.name) AGAINST (?)', $accn );
+              $coge->resultset('FeatureName')->search( $search, $join )->search_literal( 'MATCH(me.name) AGAINST (?)', $accn );
         }
     }
     if ($anno) {
         push @names,
-          $coge->resultset('FeatureName')->search( $search, $join )
-          ->search_literal( 'MATCH(annotation) AGAINST (?)', $anno );
+          $coge->resultset('FeatureName')->search( $search, $join )->search_literal( 'MATCH(annotation) AGAINST (?)', $anno );
     }
+    
     my @opts;
     foreach my $name (@names) {
         my $item = $name->name;
@@ -185,14 +204,22 @@ sub cogesearch {
         $seen{ uc($item) }++;
         push @opts, "<OPTION>$item</OPTION>";
     }
+    
+    #################### mdb added 8/11/15 for ES migration
+    my @organisms = search_organisms($coge, $org_name);
+    
+    
+    ####################
+    
+    # Check for too many results to display
     if ( @opts > 10000 ) {
-        return $blank
-          . "Search results over 10000, please refine your search.\n";
+        return $blank . "Search results over 10000, please refine your search.\n";
     }
-    $html .=
-      "<font class=small>Name count: " . scalar @opts . "</font>\n<BR>\n";
-    $html .=
-qq{<SELECT id="accn_select" SIZE="10" MULTIPLE onChange="source_search_chain(); " >\n};
+    
+    # Generate HTML
+    my $html;
+    $html .= "<font class=small>Name count: " . scalar @opts . "</font>\n<BR>\n";
+    $html .= qq{<SELECT id="accn_select" SIZE="10" MULTIPLE onChange="source_search_chain(); " >\n};
     $html .= join( "\n", @opts );
     $html .= "\n</SELECT>\n";
     $html =~ s/<OPTION/<OPTION SELECTED/;
@@ -625,38 +652,31 @@ sub get_data_source_info_for_accn {
     return ("<font class='small'>Dataset count: " . $count . "</font>\n<BR>\n" . $html );
 }
 
-sub get_orgs {
+sub get_orgs { # mdb changed 8/12/15 -- combined name and description search
     my %opts    = @_;
-    my $type    = $opts{type};
     my $search  = $opts{search};
     my $id_only = $opts{id_only};
     
-    my @db;
-    my $count;
-    if ( $type && $type eq "name" ) {
-        @db = $coge->resultset("Organism")->search( { name => { like => "%".$search."%" } } );
-        $count = scalar @db;
-    }
-    elsif ( $type && $type eq "desc" ) {
-        @db = $coge->resultset("Organism")->search( { description => { like => "%".$search."%" } } );
-        $count = scalar @db;
+    my (@organisms, $count);
+    if ($search) {
+        @organisms = search_organisms($coge, $search);
+        $count = scalar @organisms;
     }
     else {
         $count = $coge->resultset("Organism")->count();
         #@db = $coge->resultset("Organism")->all;
     }
-    return map { $_->id } @db if $id_only;
+    
+    return map { $_->id } @organisms if $id_only;
 
-    #my @db = $name ? $coge->resultset('Organism')->search({name=>{like=>"%".$name."%"}})
-    #  : $coge->resultset('Organism')->all();
     my @opts;
-    foreach my $item ( sort { uc( $a->name ) cmp uc( $b->name ) } @db ) {
+    foreach my $item ( sort { uc( $a->name ) cmp uc( $b->name ) } @organisms ) {
         push @opts,
             "<OPTION value=\"" . $item->id . "\" id=\"o" . $item->id . "\">" . $item->name . "</OPTION>";
     }
     
     my $html =
-        qq{<FONT CLASS ="small" id="org_count">Organism count: }
+        qq{<FONT CLASS ="small" id="org_count">Matching organisms: }
       . $count
       . qq{</FONT>\n<BR>\n};
     if ( $search && !@opts ) {
