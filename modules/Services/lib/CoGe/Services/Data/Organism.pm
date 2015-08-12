@@ -5,6 +5,7 @@ use Mojo::Base 'Mojolicious::Controller';
 use CoGeX;
 use CoGe::Accessory::Web;
 use CoGe::Services::Auth;
+use CoGe::Core::Organism qw(search_organisms get_organism add_organism);
 
 sub search {
     my $self = shift;
@@ -22,15 +23,7 @@ sub search {
     my $db = CoGeX->dbconnect($conf);
 
     # Search organisms
-    my $search_term2 = '%' . $search_term . '%';
-    my @organisms = $db->resultset("Organism")->search(
-        \[
-            'organism_id = ? OR name LIKE ? OR description LIKE ?',
-            [ 'organism_id', $search_term  ],
-            [ 'name',        $search_term2 ],
-            [ 'description', $search_term2 ]
-        ]
-    );
+    my @organisms = search_organisms($db, $search_term);
 
     # Format response
     my @result = sort { $a->{name} cmp $b->{name} } map {
@@ -53,7 +46,7 @@ sub fetch {
     my $conf = CoGe::Accessory::Web::get_defaults();
     my $db = CoGeX->dbconnect($conf);
 
-    my $organism = $db->resultset("Organism")->find($id);
+    my $organism = get_organism($id);
     unless (defined $organism) {
         $self->render(json => {
             error => { Error => "Item not found"}
@@ -92,7 +85,7 @@ sub add {
     }
     
     # Add organism to DB
-    my $organism = $db->resultset('Organism')->find_or_create( { name => $name, description => $desc } );
+    my $organism = add_organism($db, $name, $desc);
     unless (defined $organism) {
         $self->render(json => {
             error => { Error => "Unable to add organism"}

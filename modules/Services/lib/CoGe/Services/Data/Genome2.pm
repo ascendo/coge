@@ -4,6 +4,7 @@ use Mojo::Base 'Mojolicious::Controller';
 use Mojo::JSON;
 use CoGe::Services::Auth qw(init);
 use CoGe::Services::Data::Job;
+use CoGe::Core::Genome qw(search_genomes get_genome);
 use CoGeDBI qw(get_feature_counts);
 use Data::Dumper;
 
@@ -22,37 +23,13 @@ sub search {
     # Authenticate user and connect to the database
     my ($db, $user) = CoGe::Services::Auth::init($self);
 
-    # Search genomes
-    my $search_term2 = '%' . $search_term . '%';
-    my @genomes = $db->resultset("Genome")->search(
-        \[
-            'genome_id = ? OR name LIKE ? OR description LIKE ?',
-            [ 'genome_id', $search_term  ],
-            [ 'name',        $search_term2 ],
-            [ 'description', $search_term2 ]
-        ]
-    );
-    
-    # Search organisms
-    my @organisms = $db->resultset("Organism")->search(
-        \[
-            'name LIKE ? OR description LIKE ?',
-            [ 'name',        $search_term2 ],
-            [ 'description', $search_term2 ]
-        ]
-    );
-    
-    # Combine matching genomes and organisms, preventing duplicates
-    my %unique;
-    map { $unique{ $_->id } = $_ } @genomes;
-    foreach my $organism (@organisms) {
-        map { $unique{ $_->id } = $_ } $organism->genomes;
-    }
+    # Search genomes (including organism name/desc)
+    my @genomes = search_genomes($db, $search_term);
 
-    # Filter response
+    # Filter response on permissions
     my @filtered = grep {
         !$_->restricted || (defined $user && $user->has_access_to_genome($_))
-    } values %unique;
+    } @genomes;
 
     # Format response
     my @result;
@@ -101,7 +78,7 @@ sub fetch {
     # Authenticate user and connect to the database
     my ($db, $user) = CoGe::Services::Auth::init($self);
 
-    my $genome = $db->resultset("Genome")->find($id);
+    my $genome = get_genome($id);
     unless (defined $genome) {
         $self->render(json => {
             error => { Error => "Item not found"}

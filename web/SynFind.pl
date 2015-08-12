@@ -604,7 +604,7 @@ sub get_type_name {
     return $type->name;
 }
 
-sub get_types {
+sub get_types { #FIXME dup'ed in FeatView.pl, move into Core::Features
     my %opts = @_;
     my $dsgid = $opts{dsgid};
     my $accn  = $opts{accn};
@@ -632,7 +632,7 @@ sub get_types {
     my $rs = get_features(
         dataset_id => $genome->dataset_ids,
         name       => $accn,
-        type_id    => 3
+        type_id    => 3 #FIXME magic number
     );
     
     %seen = ();
