@@ -1,4 +1,4 @@
-<SCRIPT language="JavaScript">
+<script type="text/javascript">
 
 $(function() {
 	$('#accn').focus();
@@ -38,7 +38,7 @@ function search_chain(val) {
 
 function go_cogesearch () {
 //	cogesearch(['args__accn','accn', 'args__anno','annosearch','args__type','type', 'args__org_id','org_id', 'args__feat_name_wild','feat_name_wild', 'args__feat_anno_wild', 'feat_anno_wild','args__org_name','org_name','args__org_desc','org_desc'],[source_search_chain]);
-	cogesearch(['args__accn','accn', 'args__anno','annosearch','args__type','type', 'args__org_id','org_id', 'args__org_name','org_name','args__org_desc','org_desc'],[source_search_chain]);
+	cogesearch(['args__accn','accn', 'args__anno','annosearch','args__type','type', 'args__org_id','org_id', 'args__org_name','org_name'],[source_search_chain]);
 }
 
 function source_search_chain (val) {
@@ -219,7 +219,7 @@ function onEnter(e) {
 	if (e.which == 13) 
 		search_chain(1);
 }
-</SCRIPT>
+</script>
 
 <table class="ui-widget-content ui-corner-all coge-section">
 	<tr>
@@ -272,9 +272,11 @@ function onEnter(e) {
 		<td>
 			<span class="ui-button ui-button-go ui-corner-all coge-button-lg" onclick="search_chain(1)">Search</span>
 		</td>
+		<!--
 		<td align="right">
 			<span class="ui-button ui-corner-all coge-button-lg" onclick="$('#feat_list').dialog('open');">Feature List</span>
 		</td>
+		-->
 	</tr>
 </table>
 
