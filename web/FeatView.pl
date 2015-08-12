@@ -672,25 +672,22 @@ sub get_orgs { # mdb changed 8/12/15 -- combined name and description search
     my @opts;
     foreach my $item ( sort { uc( $a->name ) cmp uc( $b->name ) } @organisms ) {
         push @opts,
-            "<OPTION value=\"" . $item->id . "\" id=\"o" . $item->id . "\">" . $item->name . "</OPTION>";
+            "<option value=\"" . $item->id . "\" id=\"o" . $item->id . "\">" . $item->name . "</option>";
     }
     
-    my $html =
-        qq{<FONT CLASS ="small" id="org_count">Matching organisms: }
-      . $count
-      . qq{</FONT>\n<BR>\n};
+    my $html = qq{<font class="small" id="org_count">Matching organisms: } . $count . qq{</font>\n<br>\n};
     if ( $search && !@opts ) {
-        $html .= qq{<input type = hidden name="org_id" id="org_id"><br>};
+        $html .= qq{<input type="hidden" name="org_id" id="org_id"><br>};
         $html .= "No results";
         return $html;
     }
-    unshift( @opts, "<OPTION value=\"all\" id=\"all\">All Listed Organisms</OPTION>" );
+    unshift( @opts, qq{<option value="all" id="all">All Listed Organisms</option>} );
     my $size = scalar @opts;
     $size = 8 if $size > 8;
-    $html .= qq{<SELECT id="org_id" SIZE="$size" MULTIPLE >\n};
-    $html .= join( "\n", @opts );
-    $html .= "\n</SELECT>\n";
-    $html =~ s/OPTION/OPTION SELECTED/;
+    $html .= qq{<select id="org_id" size="$size" style="max-width:50em;" MULTIPLE>};
+    $html .= join('', @opts);
+    $html .= "</select>";
+    $html =~ s/option/option SELECTED/; # set the first option as selected
     return $html;
 }
 
