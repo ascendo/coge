@@ -801,6 +801,7 @@ sub query {
 	my $opts       = shift;
 	my $dataset_id = $opts->{dataset_id};  # dataset id or array ref of ids
 	my $name       = $opts->{name};        # feature name or array ref of names
+	my $annotation = $opts->{annotation};  # annotation string or array ref of strings
 	my $type_id    = $opts->{type_id};     # feature type id or array ref of ids
 	my $chromosome = $opts->{chromosome} || $opts->{chr};
 	my $start      = $opts->{start};
@@ -808,6 +809,7 @@ sub query {
 	my %query;
 	$query{dataset}      = $dataset_id if $dataset_id;
 	$query{'names.name'} = $name       if $name;
+	$query{'annotations.annotation'} = $annotation if $annotation;
 	$query{type}         = $type_id    if $type_id;
 	$query{chromosome}   = $chromosome if defined $chromosome;
 
