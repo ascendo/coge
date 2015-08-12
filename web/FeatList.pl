@@ -656,7 +656,8 @@ sub send_to_xls {
 
     foreach my $item ( split /,/, $accn_list ) {
         my ( $featid, $gstid ) = split /_/, $item;
-        my ($feat) = $coge->resultset("Feature")->find($featid);
+#        my ($feat) = $coge->resultset("Feature")->find($featid);
+		my $feat = get_feature($featid);
 
         next unless $feat;
         my ($name) = sort $feat->names;
@@ -677,7 +678,7 @@ sub send_to_xls {
         $worksheet->write( $i, 1, $feat->type->name );
         $worksheet->write( $i, 2, $feat->start . "-" . $feat->stop );
         $worksheet->write( $i, 3, $feat->strand );
-        $worksheet->write( $i, 4, $feat->chr );
+        $worksheet->write( $i, 4, $feat->chromosome );
         $worksheet->write( $i, 5, $feat->length );
         $worksheet->write( $i, 6, $gc );
         $worksheet->write( $i, 7, $at );

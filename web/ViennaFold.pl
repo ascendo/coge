@@ -42,7 +42,8 @@ my $stop       = $form->param('stop');
 $stop = $start unless $stop;
 
 if ($featid) {
-    my ($feat) = $coge->resultset('Feature')->find($featid);
+#    my ($feat) = $coge->resultset('Feature')->find($featid);
+	my $feat = get_feature($featid);
     $dsid = $feat->dataset_id;
     $chr  = $feat->chromosome;
     ($seq) =

@@ -1093,7 +1093,7 @@ sub get_pair_info {
             next;
         }
         #my $feat = $coge->resultset('Feature')->find($fid);
-        my $feat = get_feature($fid, 'matt');
+        my $feat = get_feature($fid);
         push @anno, $feat->annotation_pretty_print_html;
     }
     return unless @anno;

@@ -4,6 +4,7 @@ use base 'CGI::Application';
 
 use CoGeX;
 use CoGe::Accessory::Web;
+use CoGe::Core::Features qw( get_feature );
 use CoGe::Core::Storage qw( get_experiment_data );
 use File::Spec;
 use File::Slurp;
@@ -89,7 +90,7 @@ sub parse_data {
 
 sub fetch_data {
     return $_, get_experiment_data(
-        chr => $FEATURE->chr,
+        chr => $FEATURE->chromosome,
         start => $FEATURE->start,
         stop => $FEATURE->stop,
         eid => $_->id,
@@ -140,7 +141,8 @@ sub get {
 
     # Set global variables
     $P = CoGe::Accessory::Web::get_defaults($config);
-    $FEATURE = $db->resultset("Feature")->find($fid);
+#    $FEATURE = $db->resultset("Feature")->find($fid);
+	$FEATURE = get_feature($fid);
 
     return encode_json({}) unless $FEATURE;
 

@@ -8,8 +8,8 @@ use CoGe::Accessory::Utils qw( commify );
 use CoGe::Accessory::LogUser;
 use CoGe::Accessory::Jex;
 use CoGe::Accessory::Web;
-use CoGe::Core::Notebook qw(notebookcmp);
 use CoGe::Core::Features qw(get_feature get_features);
+use CoGe::Core::Notebook qw(notebookcmp);
 use CGI;
 use JSON::XS;
 use HTML::Template;
@@ -851,7 +851,8 @@ sub get_anno {
         }
     }
     elsif ($fid) {
-        my $feat = $coge->resultset('Feature')->find($fid);
+#        my $feat = $coge->resultset('Feature')->find($fid);
+		my $feat = get_feature($fid);
         push @feats, $feat if $feat;
     }
     return unless @feats;
@@ -962,22 +963,23 @@ sub source_search {
     }
     my $blank = qq{<input type="hidden" id="dsid">------------};
     return $blank unless $accn;
-    my @feats = $coge->resultset('Feature')->search(
-        { 'feature_names.name' => $accn },
-        {
-            join       => 'feature_names',
-            'prefetch' => {
-                'dataset' => [
-                    'data_source',
-                    {
-                        'dataset_connectors' => {
-                            'genome' => [ 'organism', 'genomic_sequence_type' ]
-                        }
-                    }
-                ]
-            }
-        }
-    );
+#    my @feats = $coge->resultset('Feature')->search(
+#        { 'feature_names.name' => $accn },
+#        {
+#            join       => 'feature_names',
+#            'prefetch' => {
+#                'dataset' => [
+#                    'data_source',
+#                    {
+#                        'dataset_connectors' => {
+#                            'genome' => [ 'organism', 'genomic_sequence_type' ]
+#                        }
+#                    }
+#                ]
+#            }
+#        }
+#    );
+	my @feats = get_features(name => $accn);
     my %sources;
     foreach my $feat (@feats) {
 
@@ -1098,7 +1100,8 @@ sub go_synfind {
 
     my $list_link = qq{<a href="$genomes_url" target="_blank">} . @ids . ' genome' . ( @ids > 1 ? 's' : '' ) . '</a>';
 
-    my $feat = $coge->resultset('Feature')->find($fid);
+#    my $feat = $coge->resultset('Feature')->find($fid);
+	my $feat = get_feature($fid);
     my $feat_url = "<a href='FeatView.pl?fid=$fid' target='_blank'>" . $feat->name . "</a>";
 
     my ( $source_name, $titleA ) = gen_org_name( dsgid => $source_dsgid, write_log => 0 );
@@ -1451,7 +1454,8 @@ sub get_results {
 
     my $list_link = qq{<a href="$genomes_url" target="_blank">} . @ids . ' genome' . ( @ids > 1 ? 's' : '' ) . '</a>';
 
-    my $feat = $coge->resultset('Feature')->find($fid);
+#    my $feat = $coge->resultset('Feature')->find($fid);
+	my $feat = get_feature($fid);
     my $feat_url = "<a href='FeatView.pl?fid=$fid' target='_blank'>" . $feat->name . "</a>";
 
     my ( $source_name, $titleA ) = gen_org_name( dsgid => $source_dsgid, write_log => 0 );
@@ -1608,7 +1612,8 @@ sub get_results {
 
     foreach my $item ( [ $fid, "query" ], @$matches ) {
         my ( $tfid, $match_type, $synteny_score ) = @$item;
-        my $feat = $coge->resultset('Feature')->find($tfid);
+#        my $feat = $coge->resultset('Feature')->find($tfid);
+		my $feat = get_feature($tfid);
         my $dsg;
 
         foreach my $dsgt ( $feat->genomes ) {
@@ -2157,7 +2162,8 @@ sub generate_feat_info {
     my $featid = $opts{featid};
     ( $featid, my $dsgid ) = split( /_/, $featid );
     my ($dsg)  = $coge->resultset('Genome')->find($dsgid);
-    my ($feat) = $coge->resultset("Feature")->find($featid);
+#    my ($feat) = $coge->resultset("Feature")->find($featid);
+	my $feat = get_feature($featid);
     unless ( $dsg && $feat && ref($feat) =~ /Feature/i ) {
         return "Unable to retrieve Feature object for id: $featid";
     }
@@ -2264,7 +2270,8 @@ sub get_master_syn_sets {
             next unless $data[6] == $qdsgid;
             my $id = $data[0];
             unless ( $data{$id} ) {
-                my ($feat) = $coge->resultset('Feature')->find($id);
+#                my ($feat) = $coge->resultset('Feature')->find($id);
+				my $feat = get_feature($id);
                 my $chr    = $feat->chromosome;
                 my $start  = $feat->start;
                 $lookup{$chr}{$start}{$id} = 1;
@@ -2338,7 +2345,8 @@ sub get_master_syn_sets {
                             $chr  .= "-,";
                             next;
                         }
-                        my ($feat) = $coge->resultset('Feature')->find($fid);
+#                        my ($feat) = $coge->resultset('Feature')->find($fid);
+						my $feat = get_feature($fid);
                         $chr .= $feat->chromosome . ",";
                         if ( $count == 1 ) {
 
@@ -2372,10 +2380,11 @@ sub get_master_syn_sets {
                         }
                         else {
                             $name .= "proxy" . ",";
-                            my $rs = $coge->resultset('Feature');
-                            $rs->result_class(
-                                'DBIx::Class::ResultClass::HashRefInflator');
-                            my ($feat_hash) = $rs->find($fid);
+#                            my $rs = $coge->resultset('Feature');
+#                            $rs->result_class(
+#                                'DBIx::Class::ResultClass::HashRefInflator');
+#                            my ($feat_hash) = $rs->find($fid);
+							my $feat_hash = get_feature($featid);
                             $link .=
                                 ";x$count="
                               . $feat_hash->{start}
@@ -2691,27 +2700,33 @@ sub get_neighboring_region {
     return "no feature id specified" unless $fid;
 
     #determine distance of $window_size/2 genes up and down from query feature
-    my $feat = $coge->resultset('Feature')->find($fid);
+#    my $feat = $coge->resultset('Feature')->find($fid);
+	my $feat = get_feature($fid);
 
     my $count = 0;
     my %seen;
     my $last_item;
   item: foreach my $item (
-        $coge->resultset('Feature')->search(
-            {
+#        $coge->resultset('Feature')->search(
+		get_features(
+#            {
                 dataset_id      => $feat->dataset_id,
-                feature_type_id => 3,
+ #               feature_type_id => 3,
+ 				type_id => 3,
                 chromosome      => $feat->chromosome,
                 start           => { '>', $feat->stop }
-            },
-            {
+ #           }
+ 			,
+#            {
 
                 #							  join =>'feature_names',
                 #							  prefetch =>'feature_names',
-                order_by => 'start ASC',
-                limit    => $window_size
+#                order_by => 'start ASC',
+				sort => 'start',
+#                limit    => $window_size
+				size => $window_size
                 , #search for more than we need as some are alternative spliced transcripts.
-            }
+ #           }
         )
       )
     {
@@ -2729,21 +2744,26 @@ sub get_neighboring_region {
     $count = 0;
     %seen  = ();
   item: foreach my $item (
-        $coge->resultset('Feature')->search(
-            {
+#        $coge->resultset('Feature')->search(
+		get_features(
+#            {
                 dataset_id      => $feat->dataset_id,
-                feature_type_id => 3,
+#                feature_type_id => 3,
+				type_id => 3,
                 chromosome      => $feat->chromosome,
                 start           => { '<', $feat->start }
-            },
-            {
+#            }
+			,
+#            {
 
                 #							  join =>'feature_names',
-                prefetch => 'feature_names',
-                order_by => 'start DESC',
-                limit    => $window_size
+ #               prefetch => 'feature_names',
+ #               order_by => 'start DESC',
+ 				sort => { start => 'desc' },
+#                limit    => $window_size
+				size => $window_size
                 , #search for more than we need as some are alternative spliced transcripts.
-            }
+#            }
         )
       )
     {

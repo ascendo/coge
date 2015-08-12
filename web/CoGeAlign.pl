@@ -2,6 +2,7 @@
 use strict;
 use CGI;
 use CGI::Ajax;
+use CoGe::Core::Features qw( get_feature );
 use CoGeX;
 use CoGeX::Result::Feature;
 use Data::Dumper;
@@ -174,7 +175,8 @@ sub generate_sequence {
         else {
             $fid = $featid;
         }
-        my ($feat) = $coge->resultset('Feature')->find($fid);
+#        my ($feat) = $coge->resultset('Feature')->find($fid);
+		my $feat = get_feature($fid);
         next unless $feat;
         my $seq = $feat->fasta(
             col       => 0,
@@ -208,7 +210,8 @@ sub refresh_seq {
         else {
             $fidt = $fid;
         }
-        my ($feat) = $coge->resultset("Feature")->find($fidt);
+#        my ($feat) = $coge->resultset("Feature")->find($fidt);
+		my $feat = get_feture($fidt);
         next unless $feat;
         my $seq = $feat->fasta(
             col       => 0,
@@ -484,7 +487,8 @@ sub parse_results {
         if ($codon_align) {
             my ($fid) = $name =~ /fid_(\d+)/;
             if ($fid) {
-                my $feat = $coge->resultset('Feature')->find($fid);
+#                my $feat = $coge->resultset('Feature')->find($fid);
+				my $feat = get_feature($fid);
                 my $tseq = $feat->genomic_sequence;
                 my $pos  = 0;
                 my $dna;

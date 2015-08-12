@@ -121,7 +121,8 @@ sub gen_html {
             stop       => $stop,
           ) if ( $chr && $start && $stop );
     }
-    push @all_feats, $coge->resultset('Feature')->find($featid) if $featid;
+#    push @all_feats, $coge->resultset('Feature')->find($featid) if $featid;
+    push @all_feats, get_feature($featid) if $featid;
     return " " unless @all_feats;
 
     my @feats;

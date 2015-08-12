@@ -339,8 +339,7 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub get_feature {
-	my $id = shift;
-	return get( 'features', $id, 'CoGe::Core::Feature' );
+	return get( 'features', shift, 'CoGe::Core::Feature' );
 }
 
 ################################################ subroutine header begin ##

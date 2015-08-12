@@ -10,6 +10,7 @@ use Data::Dumper;
 use CoGeX;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::Utils qw( commify );
+use CoGe::Core::Features qw( get_feature );
 
 use vars qw($P $PAGE_NAME $PAGE_TITLE $FORM $USER $coge $LINK);
 
@@ -107,7 +108,8 @@ sub gen_body {
     $template->param( CHR      => $chr );
 
     if ($featid) {
-        my ($feat) = $coge->resultset('Feature')->find($featid);
+#        my ($feat) = $coge->resultset('Feature')->find($featid);
+		my $feat = get_feature($featid);
         $dsid = $feat->dataset_id;
         $chr  = $feat->chromosome;
 
@@ -235,7 +237,8 @@ sub get_seq {
     my $col = $wrap ? 80 : 0;
 
     if ($featid) {
-        my $feat = $coge->resultset('Feature')->find($featid);
+#        my $feat = $coge->resultset('Feature')->find($featid);
+		my $feat = get_feature($featid);
         my ($dsg) = $feat->dataset->genomes;
         return "Restricted Access" unless $USER->has_access_to_genome($dsg);
 
@@ -436,7 +439,8 @@ qq{<span class='ui-button ui-corner-all' " onClick="featlist('FeatList.pl?};
 
 sub generate_feat_info {
     my $featid = shift;
-    my ($feat) = $coge->resultset("Feature")->find($featid);
+#    my ($feat) = $coge->resultset("Feature")->find($featid);
+    my $feat = get_feature($featid);
     unless ( ref($feat) =~ /Feature/i ) {
         return "Unable to retrieve Feature object for id: $featid";
     }

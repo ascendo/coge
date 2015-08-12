@@ -146,7 +146,8 @@ sub get_sequence {
 
     if ($fids) {
         foreach my $fid ( split(/,/, $fids) ) {
-            my $feat = $coge->resultset('Feature')->find($fid);
+#            my $feat = $coge->resultset('Feature')->find($fid);
+			my $feat = get_feature($fid);
             next unless $USER->has_access_to_dataset( $feat->dataset );
             $fasta .=
               ref($feat) =~ /Feature/i
