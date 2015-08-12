@@ -227,7 +227,6 @@ sub get_feature_counts {
 		};
 	}
 
-    # Build html response
     my $gc_args;
     $gc_args .= "typeid: ";
     my $feat_list_string = "dsgid=$dsgid";
@@ -343,7 +342,7 @@ sub get_codon_usage {
 
 #    my %seqs; # prefetch the sequences with one call to genomic_sequence (slow for many seqs)
 #    foreach my $item (@items) {
-#        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosome_names;
+#        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosomes;
 #
 #        for my $chr (@chrs) {
 #            $seqs{$chr} = $item->get_genomic_sequence(chr => $chr,
@@ -1412,7 +1411,7 @@ sub get_aa_usage {
 
     my %seqs; # prefetch the sequences with one call to genomic_sequence (slow for many seqs)
     foreach my $item (@items) {
-        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosome_names;
+        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosomes;
 
         for my $chr (@chrs) {
             $seqs{$chr} = $item->get_genomic_sequence(chr => $chr,
@@ -1899,26 +1898,28 @@ sub export_bed {
 
 sub get_gff {
     my %args = @_;
-    
-    # Get genome and check permission
     my $dsg = $DB->resultset('Genome')->find($args{gid});
+
+    # ensure user has permission
     return $ERROR unless $USER->has_access_to_genome($dsg);
 
-    # Create workflow
-    my $workflow = $JEX->create_workflow( name => "Export gff" );
     $args{basename} = sanitize_name($dsg->organism->name);
-    my ($output, $task) = generate_gff(%args);
-    $workflow->add_job($task);
 
-    # Submit workflow and block until completion
+    my $workflow = $JEX->create_workflow(name => "Export gff");
+    my ($output, %task) = generate_gff(%args);
+#    print STDERR "get_gff: ", $output, "\n",
+#                 "get_gff: ", Dumper \%task, "\n";
+    $workflow->add_job(\%task);
+
     my $response = $JEX->submit_workflow($workflow);
-    say STDERR "GenomeInfo::get_gff: wid=" . $response->{id};
+#    say STDERR "get_gff: wid=" . $response->{id};
     $JEX->wait_for_completion($response->{id});
 
-    return encode_json({
-        file => basename($output),
-        files => [ get_download_url(dsgid => $args{gid}, file => basename($output)) ]
-    });
+    my %json;
+    $json{file} = basename($output);
+    $json{files} = [ get_download_url(dsgid => $args{gid}, file => basename($output))];
+
+    return encode_json(\%json);
 }
 
 sub export_gff {
