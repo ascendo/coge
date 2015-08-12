@@ -154,22 +154,23 @@ sub cogesearch {
     my $org_id   = $opts{org_id};
     my $org_name = $opts{org_name};
     $org_name = undef if $org_name =~ /^search$/i;
-    my $org_desc = $opts{org_desc};
-    $org_desc = undef if $org_desc =~ /^search$/i;
+#    my $org_desc = $opts{org_desc};
+#    $org_desc = undef if $org_desc =~ /^search$/i;
+    my $org_desc = $org_name;
+    print STDERR Dumper \%opts, "\n";
+    
     my $blank      = qq{<input type="hidden" id="accn_select">};
     my $weak_query = "Query needs to be better defined.";
-    print STDERR Dumper \%opts, "\n";
-
     if ( !$accn && !$anno && !$fid ) {
         return $weak_query . $blank unless $org_id && $type;
     }
     
+    # Search for features
     my %seen;
     my $search = {};
     $search->{feature_type_id} = $type if $type;
     $search->{'organism.name'} = { like => "%" . $org_name . "%" } if $org_name;
-    $search->{'organism.description'} = { like => "%" . $org_desc . "%" }
-      if $org_desc;
+    $search->{'organism.description'} = { like => "%" . $org_desc . "%" } if $org_desc;
     my $join = {
         join => [
             {   'feature' => {
@@ -197,33 +198,39 @@ sub cogesearch {
           $coge->resultset('FeatureName')->search( $search, $join )->search_literal( 'MATCH(annotation) AGAINST (?)', $anno );
     }
     
+    # Build options for select dropdown
     my @opts;
     foreach my $name (@names) {
         my $item = $name->name;
         next if $seen{ uc($item) };
         $seen{ uc($item) }++;
-        push @opts, "<OPTION>$item</OPTION>";
+        push @opts, "<option>$item</option>";
     }
     
     #################### mdb added 8/11/15 for ES migration
-    my @organisms = search_organisms($coge, $org_name);
-    
+    my @ds_ids;
+    if ($org_name) {
+        my @organisms = search_organisms($coge, $org_name);
+        @ds_ids = map { $_->id } map { $_->datasets } @organisms;
+    }
+    warn 'matt!!!!!!!!!!', Dumper \@ds_ids;
     
     ####################
     
     # Check for too many results to display
-    if ( @opts > 10000 ) {
-        return $blank . "Search results over 10000, please refine your search.\n";
+    my $max_results = 10_000;
+    if ( @opts > $max_results ) {
+        return $blank . "Search results over $max_results, please refine your search.";
     }
     
     # Generate HTML
     my $html;
-    $html .= "<font class=small>Name count: " . scalar @opts . "</font>\n<BR>\n";
-    $html .= qq{<SELECT id="accn_select" SIZE="10" MULTIPLE onChange="source_search_chain(); " >\n};
-    $html .= join( "\n", @opts );
-    $html .= "\n</SELECT>\n";
-    $html =~ s/<OPTION/<OPTION SELECTED/;
-    return $blank . "No results found\n" unless $html =~ /OPTION/;
+    $html .= "<font class='small'>Name count: " . scalar @opts . "</font><br>";
+    $html .= qq{<select id="accn_select" size="10" MULTIPLE onChange="source_search_chain();">};
+    $html .= join('', @opts);
+    $html .= "</select>";
+    $html =~ s/<option/<option SELECTED/;
+    return $blank . "No results found" unless $html =~ /option/;
     return $html;
 }
 
@@ -743,10 +750,8 @@ sub codon_aa_alignment {
     my $featid = $opts{featid};
     my $gstid  = $opts{gstid};
     my ($feat) = $coge->resultset('Feature')->find($featid);
-    my $seq =
-      join( " ", $feat->genomic_sequence( gstid => $gstid ) =~ /(...)/g );
-    my $aa =
-      join( "   ", split //, $feat->protein_sequence( gstid => $gstid ) );
+    my $seq = join( " ", $feat->genomic_sequence( gstid => $gstid ) =~ /(...)/g );
+    my $aa  = join( "   ", split(//, $feat->protein_sequence( gstid => $gstid )) );
     my @seq = $seq =~ /(.{1,80})/g;
     my @aa  = $aa  =~ /(.{1,80})/g;
 
