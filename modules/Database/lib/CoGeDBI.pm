@@ -383,8 +383,6 @@ sub get_feature_counts {
     $query .= " GROUP BY f.chromosome, f.feature_type_id";
     my $sth = $dbh->prepare($query);
     $sth->execute();
-    
-    # Fetch results
     my $results = $sth->fetchall_hashref(['chromosome', 'type_id']);
     #print STDERR Dumper $results, "\n";
 
