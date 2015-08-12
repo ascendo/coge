@@ -9,31 +9,21 @@ $(function() {
 
 function search_chain(val) {
 	$('#data_table').show(0);
+	$('#anno,#accn_list,#Source,#FeatType').hide();
+	
 	accnminlen = 3;
 	annominlen = 8;
-	$('#anno').hide();
-	$('#accn_list').hide();
-	$('#Source').hide();
-	$('#FeatType').hide();
-	var searched = 0;
-	if ((val == 1)){
-	    $('#anno').html('<img src="./picts/animations/DNA_orbit_animated_small_third.gif" >').show();
-	    searched=1;
-	    go_cogesearch();
-	}
-	else if ($('#accn').val().length > accnminlen) {
- 	    $('#anno').html('<img src="./picts/animations/DNA_orbit_animated_small_third.gif" >').show();
- 	    searched=1;
-	    go_cogesearch();
-	}
-	else if ($('#annosearch').val().length > annominlen) {
-	    $('#anno').html('<img src="./picts/animations/DNA_orbit_animated_small_third.gif" >').show();
-	    searched=1;
-	    go_cogesearch();
-	}
+	var anno = $('#anno');
 	
-	if (!searched)
-	    $('anno').html('Search not run.').show();
+	if (val == 1 
+			|| $('#accn').val().length > accnminlen 
+			|| $('#annosearch').val().length > annominlen) 
+	{
+		anno.html('<img src="./picts/animations/DNA_orbit_animated_small_third.gif" >').show();
+	    go_cogesearch();
+	}
+	else
+		anno.html('Search not run.').show();
 }
 
 function go_cogesearch () {
