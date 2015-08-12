@@ -681,7 +681,7 @@ if ($GO) {
                 $ver = $item->version unless $ver;
                 $ver = $item->version if $item->version > $ver;
             }
-            foreach my $chr ( $ds->chromosomes ) {
+            foreach my $chr ( $ds->chromosome_names ) {
                 $fasta_output .= fasta_genomic_sequence(
                     genome => $genome,
                     seq    => $ds->get_genomic_sequence( chr => $chr ),

@@ -1829,7 +1829,7 @@ sub generate_fasta {
         }
     }
     else {
-        foreach my $chr ( sort $dsg->chromosomes ) {
+        foreach my $chr ( sort $dsg->chromosome_names ) {
 
 #		my $title = join ("||",$chr, 1, $ds->last_chromosome_position($chr), "Chr_$chr",1, "genomic", "N/A");
             my $seq = $dsg->get_genomic_sequence( chr => $chr );

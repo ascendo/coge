@@ -300,7 +300,7 @@ sub get_gc_for_feature_type {
             %seqs =
               map {
                 $_, $ds->get_genomic_sequence( chr => $_, seq_type => $gstid )
-              } $ds->chromosomes;
+              } $ds->chromosome_names;
         }
 
         #        my $t2    = new Benchmark;
@@ -1047,7 +1047,7 @@ sub get_codon_usage {
             %seqs =
               map {
                 $_, $ds->get_genomic_sequence( chr => $_, seq_type => $gstid )
-              } $ds->chromosomes;
+              } $ds->chromosome_names;
         }
         foreach my $feat (
             $ds->features(

@@ -230,7 +230,7 @@ See Also   :
 #	$version = $ds->version unless $version;
 #	$version = $ds->version if $ds->version > $version;
 ##	next unless $version == $ds->version;
-#	my @chrs = $ds->chromosomes;
+#	my @chrs = $ds->chromosome_names;
 #	$contig_set = 1 if scalar @chrs > 50; #more than 50 chromosome?  probably a contig dataset
 #	foreach my $chr (@chrs)
 #	  {

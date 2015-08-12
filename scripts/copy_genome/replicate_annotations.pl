@@ -52,7 +52,7 @@ unless ( scalar keys %$ds1 == scalar keys %$ds2 ) {
 	print STDERR "Chromosome count mismatch!  Continuing.  Check errors below.\n" if $DEBUG;
 }
 
-foreach my $chr1 ( sort $dsg1->chromosomes ) {
+foreach my $chr1 ( sort $dsg1->chromosome_names ) {
 	unless ( $ds2->{$chr1} ) {
 		print STDERR "Chromosome $chr1 does not exist in dataset_group_2.  Please check the chromosome names if you think this is in error.  Skipping to next chromosome\n" if $DEBUG;
 		next;
@@ -167,7 +167,7 @@ sub map_chr_to_ds {
 	my $dsg = shift;
 	my %ds;
 	foreach my $ds ( $dsg->datasets ) {
-		foreach my $chr ( $ds->chromosomes ) {
+		foreach my $chr ( $ds->chromosome_names ) {
 		  $ds{$chr}=$ds;
 		}
 	}

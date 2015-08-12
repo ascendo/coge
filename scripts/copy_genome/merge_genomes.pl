@@ -239,7 +239,7 @@ sub map_chr_to_ds {
     my $dsg = shift;
     my %ds;
     foreach my $ds ( $dsg->datasets ) {
-        foreach my $chr ( $ds->chromosomes ) {
+        foreach my $chr ( $ds->chromosome_names ) {
             $ds{$chr} = $ds;
         }
     }

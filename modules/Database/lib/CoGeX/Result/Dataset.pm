@@ -6,7 +6,7 @@ use Data::Dumper;
 use POSIX;
 use Carp qw (cluck);
 use CoGe::Core::Feature;
-use CoGe::Core::Features qw( get_chromosome_count get_chromosomes get_features get_total_chromosomes_length );
+use CoGe::Core::Features qw( chromosome_exists get_chromosome_count get_chromosome_names get_chromosomes get_features get_total_chromosomes_length );
 use CoGe::Core::Storage qw( reverse_complement );
 
 use base 'DBIx::Class::Core';
@@ -131,7 +131,7 @@ sub genomes {
     my @genomes;
     foreach my $dsc ( $self->dataset_connectors() ) {
         if ( defined $chr ) {
-            my %chrs = map { $_, 1 } $dsc->genome->chromosomes;
+            my %chrs = map { $_, 1 } $dsc->genome->chromosome_names;
             next unless $chrs{$chr};
         }
         push @genomes, $dsc->genome;
@@ -280,8 +280,7 @@ sub get_genomic_sequence {
 
     my $start  = $opts{start};
     my $stop   = $opts{stop};
-    my $chr    = $opts{chr};
-    $chr = $opts{chromosome} unless defined $opts{chr};
+    my $chr    = $opts{chr} || $opts{chromosome};
     my $strand = $opts{strand};
     my $gstid  = $opts{gstid};
     #print STDERR "Dataset->get_genomic_sequence:  start $start stop $stop chr $chr strand $strand\n";
@@ -497,7 +496,7 @@ sub has_gene_annotation {
 
     #my %opts = @_;
 #    return $self->features( { 'feature_type_id' => { -in => [ 1, 2, 3 ] } } )
-    return $self->features( { type => [ 1, 2, 3 ] } )
+    return $self->features( type_id => [ 1, 2, 3 ] )
       ->count;
 }
 
@@ -527,6 +526,28 @@ sub genomic_sequence_type {
 
 ################################################ subroutine header begin ##
 
+=head2 chromosome_names
+
+ Usage     :
+ Purpose   :
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub chromosome_names {
+    my $self = shift;
+    return get_chromosome_names(dataset_id => $self->id, sort => { 'stop' => 'desc' })
+}
+
+################################################ subroutine header begin ##
+
 =head2 chromosomes
 
  Usage     :
@@ -545,49 +566,14 @@ See Also   :
 sub chromosomes {
     my $self   = shift;
     my %opts   = @_;
-#    my $ftid   = $opts{ftid};   #feature_type_id for feature_type of name "chromosome";
-    my $length = $opts{length}; #option to return length of chromosomes as well
     my $limit  = $opts{limit};  #optional number of chromosomes to return, sorted by size
     my $max    = $opts{max};    #optional number of chromosomes to avoid slow query, sorted by size
-    my @data;
 
-    #this query is faster if the feature_type_id of feature_type "chromosome" is known.
-    #features of this type refer to the entire stored sequence which may be a fully
-    #assembled chromosome, or a contig, supercontig, bac, etc.
-#    my $search_type = { order_by => { -desc => 'stop' } };
-#    if ($ftid) {
-#        $search->{feature_type_id} = $ftid;
-#    }
-#    else {
-#        $search->{name}      = "chromosome";
-#        $search_type->{join} = "feature_type";
-#    }
-    
-#    if ($max && $self->features( $search, $search_type)->count() > $max ) {
-    if ($max && get_chromosome_count(dataset_id => $self->id) > $max) {
-        return;
-    }
+    return if ($max && get_chromosome_count(dataset_id => $self->id) > $max);
 
 	my %query = (dataset_id => $self->id, sort => { 'stop' => 'desc' });
-    if ($limit) {
-#        $search_type->{rows} = $limit;
-        $query{size} = $limit;
-    }
-    
-    if ($length) {
-#        @data = $self->features( $search, $search_type );
-        @data = get_chromosomes(%query);
-    }
-    else {
-        @data = map { $_->chromosome } get_chromosomes(%query);
-    }
-    unless (@data) {
-        my %seen;
-        foreach my $feat ( $self->features({}, { distinct => 'chromosome' }) ) {
-	       $seen{$feat->chromosome} = 1 if $feat->chromosome;
-        }
-        @data = sort keys %seen;
-    }
+    $query{size} = $limit if ($limit);    
+    my @data = get_chromosomes(%query);
     return wantarray ? @data : \@data;
 }
 
@@ -609,29 +595,29 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub has_chromosome {
-
     my $self = shift;
     my %opts = @_;
     my $chr  = $opts{chr};
-    my ($res) =
-      $self->features->count( { "feature_type.name" => "chromosome", },
-        { join => ["feature_type"] } );
-    if ($res) {
-        my ($res) = $self->features(
-            {
-                "feature_type.name" => "chromosome",
-                "chromosome"        => "$chr",
-            },
-            { join => ["feature_type"] }
-        );
-        return 1 if $res;
-        return 0;
-    }
-    else {
-        my ($res) = $self->features->count( { "chromosome" => "$chr", }, );
-        return 1 if $res;
-        return 0;
-    }
+    return chromosome_exists(dataset_id => $self->id, chromosome => chr);
+#    my ($res) =
+#      $self->features->count( { "feature_type.name" => "chromosome", },
+#        { join => ["feature_type"] } );
+#    if ($res) {
+#        my ($res) = $self->features(
+#            {
+#                "feature_type.name" => "chromosome",
+#                "chromosome"        => "$chr",
+#            },
+#            { join => ["feature_type"] }
+#        );
+#        return 1 if $res;
+#        return 0;
+#    }
+#    else {
+#        my ($res) = $self->features->count( { "chromosome" => "$chr", }, );
+#        return 1 if $res;
+#        return 0;
+#    }
 }
 
 ################################################ subroutine header begin ##
@@ -700,7 +686,7 @@ sub fasta {
     $col = $opts{wrap}   unless defined $col;
     $col = 100           unless defined $col;
     my $chr = $opts{chr};
-    ($chr) = $self->chromosomes unless defined $chr;
+    ($chr) = $self->chromosome_names unless defined $chr;
     my $strand = $opts{strand} || 1;
     my $start  = $opts{start}  || 1;
     $start = 1 if $start < 1;
@@ -816,7 +802,7 @@ sub gff {
     # Generate GFF header
     my @chrs;
     my %chrs;
-    foreach my $chr ( $ds->chromosomes ) {
+    foreach my $chr ( $ds->chromosome_names ) {
         $chrs{$chr} = $ds->last_chromosome_position($chr);
     }
     if ($chromosome) {
@@ -854,13 +840,13 @@ sub gff {
     foreach my $chr (@chrs) {
         my %seen = (); #for storage of seen names organized by $feat_name{$name}
         my $rs_feat = $ds->features(
-            { chromosome => $chr }, # mdb added 4/23/14 issue 364
-            {
+             chromosome => $chr , # mdb added 4/23/14 issue 364
+#            {
 #                'prefetch' => $prefetch,
 #                'order_by' => [ 'me.chromosome', 'me.start', 'me.feature_type_id'
                 'sort' => [ 'chromosome', 'start', 'type'
                   ] #go by order in genome, then make sure that genes (feature_type_id == 1) is first
-            }
+ #           }
         );
 
         #gff columns: chr organization feature_type start stop strand . name
@@ -1126,20 +1112,20 @@ sub _feat_search {
     #print STDERR "_feat_search\n";
 
     return $ds->features(
-        {
+#        {
 #            'me.chromosome'      => $chr,
 #            'feature_names.name' => { 'IN' => $name_search },
 #            'me.feature_type_id' => { 'NOT IN' => $skip_ftids },
             chromosome => $chr,
             'names.name' => $name_search,
-            'not' => { type => $skip_ftids }
-        },
-        {
+            'not' => { type => $skip_ftids },
+#        },
+#        {
 #            'join'     => 'feature_names',
 #            'prefetch' => [ 'feature_type', 'locations' ],
 #            'order_by' => [ 'me.start', 'locations.start', 'me.feature_type_id' ]
             'sort' => [ 'start', 'locations.start', 'type' ]
-        }
+#        }
     );
 }
 
@@ -1531,7 +1517,7 @@ sub trans_type {
     my $self = shift;
     my $trans_type;
     foreach
-      my $feat ( $self->features( { feature_type_id => 3 }, { rows => 10 } ) )
+      my $feat ( $self->features( feature_type_id => 3, size => 10 ) )
     {
 
         #	next unless $feat->type->name =~ /cds/i;
@@ -1544,26 +1530,29 @@ sub trans_type {
 
 sub distinct_feature_type_ids {
     my $self = shift;
-    my %ids = map { $_->feature_type_id => 1 } $self->features(
-        {},
-        {
-            columns  => ['feature_type_id'],
-            distinct => 1
-        }
-    );
+    my %ids = map { $_->feature_type_id => 1 } get_feature_ids( dataset_id => $self->id );
+#     $self->features(
+#        {},
+#        {
+#            columns  => ['feature_type_id'],
+#            distinct => 1
+#        }
+#    );
     return wantarray ? keys %ids : [ keys %ids ];
 }
 
 sub distinct_feature_type_names {
     my $self = shift;
-    my %names = map { $_->feature_type->name => 1 } $self->features(
-        {},
-        {
-            join     => 'feature_type',
-            columns  => ['feature_type.name'],
-            distinct => 1
-        }
-    );
+    my %names = map { $_ => 1 } get_features_names( dataset_id => $self->id );
+#    my %names = map { $_->feature_type->name => 1 }
+#     $self->features(
+#        {},
+#        {
+#            join     => 'feature_type',
+#            columns  => ['feature_type.name'],
+#            distinct => 1
+#        }
+#    );
     return wantarray ? keys %names : [ keys %names ];
 }
 
@@ -1571,15 +1560,22 @@ sub translation_type {
     my $self = shift;
     foreach my $feat (
         $self->features(
-            { 'annotation_type_id' => 10973 },
-            { join                 => 'feature_annotations' }
+            'annotations.type' => 10973
+#            { 'annotation_type_id' => 10973 },
+#            { join                 => 'feature_annotations' }
         )
       )
     {
         foreach
-          my $anno ( $feat->annotations( { annotation_type_id => 10973 } ) )
+#          my $anno ( $feat->annotations( { annotation_type_id => 10973 } ) )
+#        {
+#            return $anno->annotation;
+#        }
+          my $anno ( $feat->annotations )
         {
-            return $anno->annotation;
+        	if ($anno->type == 10973) {
+	            return $anno->annotation;
+        	}
         }
     }
 }
@@ -1597,10 +1593,9 @@ sub user_groups() {
 
 sub features {
 	my $self = shift;
-	my $search = shift;
-	print STDERR Dumper $search;
-	$search->{dataset_id} = $self->id;
-	my $features = get_features($search);
+	my %search = @_;
+	$search{dataset_id} = $self->id;
+	my $features = get_features(%search);
 	return wantarray ? @{$features} : $features;
 }
 

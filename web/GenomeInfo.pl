@@ -342,7 +342,7 @@ sub get_codon_usage {
 
 #    my %seqs; # prefetch the sequences with one call to genomic_sequence (slow for many seqs)
 #    foreach my $item (@items) {
-#        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosomes;
+#        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosome_names;
 #
 #        for my $chr (@chrs) {
 #            $seqs{$chr} = $item->get_genomic_sequence(chr => $chr,
@@ -1411,7 +1411,7 @@ sub get_aa_usage {
 
     my %seqs; # prefetch the sequences with one call to genomic_sequence (slow for many seqs)
     foreach my $item (@items) {
-        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosomes;
+        my @chrs = (defined $chr and $chr) ? ($chr) : $item->chromosome_names;
 
         for my $chr (@chrs) {
             $seqs{$chr} = $item->get_genomic_sequence(chr => $chr,
