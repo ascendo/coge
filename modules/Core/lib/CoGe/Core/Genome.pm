@@ -19,7 +19,7 @@ BEGIN {
     @ISA = qw( Exporter );
     @EXPORT = qw( has_statistic get_gc_stats get_noncoding_gc_stats
         get_wobble_histogram get_wobble_gc_diff_histogram get_feature_type_gc_histogram
-        fix_chromosome_id );
+        fix_chromosome_id search_genomes get_genome );
     @EXPORT_OK = qw(genomecmp);
 }
 
@@ -457,6 +457,47 @@ sub fix_chromosome_id {
     }
 
     return $chr;
+}
+
+sub search_genomes {
+    my $db = shift;
+    my $search_term = shift;
+    
+    # Search genomes
+    my $search_term2 = '%' . $search_term . '%';
+    my @genomes = $db->resultset("Genome")->search(
+        \[
+            'genome_id = ? OR name LIKE ? OR description LIKE ?',
+            [ 'genome_id', $search_term  ],
+            [ 'name',        $search_term2 ],
+            [ 'description', $search_term2 ]
+        ]
+    );
+    
+    # Search organisms
+    my @organisms = $db->resultset("Organism")->search(
+        \[
+            'name LIKE ? OR description LIKE ?',
+            [ 'name',        $search_term2 ],
+            [ 'description', $search_term2 ]
+        ]
+    );
+    
+    # Combine matching genomes and organisms, preventing duplicates
+    my %unique;
+    map { $unique{ $_->id } = $_ } @genomes;
+    foreach my $organism (@organisms) {
+        map { $unique{ $_->id } = $_ } $organism->genomes;
+    }
+    
+    return wantarray ? values %unique : [ values %unique ];
+}
+
+sub get_genome {
+    my $db = shift;
+    my $genome_id = shift;
+    
+    return $db->resultset("Genome")->find($genome_id)
 }
 
 1;
