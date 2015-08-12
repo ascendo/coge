@@ -36,12 +36,11 @@ use strict;
 use warnings;
 
 use CoGe::Accessory::Web qw(get_defaults);
-use CoGe::Core::Elasticsearch qw(search get);
+use CoGe::Core::Elasticsearch qw(bulk_index get search);
 use CoGeX;
 use Data::Dumper;
 use Encode qw(encode);
 use JSON::XS;
-use Search::Elasticsearch;
 
 our $DEBUG = 1;
 
@@ -91,7 +90,7 @@ sub copy {
 
 	my $dbh = CoGeX->dbconnect( get_defaults() )->storage->dbh;
 	my $query =
-'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature WHERE dataset_id='
+'SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id WHERE dataset_id='
 	  . $dataset_id;
 	my $features = $dbh->prepare($query);
 	$features->execute;
@@ -120,22 +119,27 @@ sub copy_rows {
 	my $features = shift;
 	my $dbh      = shift;
 	my $index    = shift || 'coge';                # optional index name
-	my $e        = Search::Elasticsearch->new();
 
+	my @docs;
+	my @ids;
 	while ( my $feature = $features->fetchrow_arrayref ) {
-		my $feature_id = $feature->[0];
-		my $body = { type => int $feature->[1], dataset => int $feature->[2] };
-		if ( $feature->[3] ) {
-			$body->{start} = int $feature->[3];
-		}
+		my $feature_id = int $feature->[0];
+		my $body       = {
+			type_id   => int $feature->[1],
+			type_name => $feature->[2],
+			dataset   => int $feature->[3]
+		};
 		if ( $feature->[4] ) {
-			$body->{stop} = int $feature->[4];
+			$body->{start} = int $feature->[4];
 		}
 		if ( $feature->[5] ) {
-			$body->{strand} = int $feature->[5];
+			$body->{stop} = int $feature->[5];
 		}
 		if ( $feature->[6] ) {
-			$body->{chromosome} = $feature->[6];
+			$body->{strand} = int $feature->[6];
+		}
+		if ( $feature->[7] ) {
+			$body->{chromosome} = $feature->[7];
 		}
 		my $db_names = $dbh->prepare(
 'SELECT name,description,primary_name FROM feature_name WHERE feature_id='
@@ -183,22 +187,18 @@ sub copy_rows {
 				type       => int $db_annotation->[1]
 			};
 			if ( $db_annotation->[2] ) {
-				$annotation->{link} = $annotation->[2];
+				$annotation->{link} = $db_annotation->[2];
 			}
 			push @$annotations, $annotation;
 		}
 		if ($annotations) {
 			$body->{annotations} = $annotations;
 		}
-		print $feature_id . ' ';
 
-		$e->index(
-			index => $index,
-			type  => 'features',
-			id    => $feature_id,
-			body  => $body
-		);
+		push @docs, $body;
+		push @ids, $feature_id;
 	}
+	bulk_index('features', \@docs, \@ids);
 }
 
 ################################################ subroutine header begin ##
@@ -208,7 +208,7 @@ sub copy_rows {
  Usage     :
  Purpose   : copy features from db to elasticsearch
  Returns   :
- Argument  : limit (num features to send), [offset (record to start at)]
+ Argument  : offset (record to start at), [limit (num features to send)]
  Throws    :
  Comments  :
 
@@ -219,18 +219,21 @@ See Also   :
 ################################################## subroutine header end ##
 
 sub dump {
-	my $limit  = shift;
 	my $offset = shift;
-	my $dbh    = CoGeX->dbconnect( get_defaults() )->storage->dbh;
-	my $query =
-'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature LIMIT '
-	  . $limit;
-	if ($offset) {
-		$query .= ' OFFSET ' . $offset;
+	my $limit = shift || 10000;
+	my $dbh = CoGeX->dbconnect( get_defaults() )->storage->dbh;
+
+	my $rows = 10000;
+	while ( $rows == 10000 ) {
+		my $query = 'SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id LIMIT ' . $limit;
+		$query .= ' OFFSET ' . $offset if ($offset);
+		my $features = $dbh->prepare($query);
+		$features->execute;
+		copy_rows( $features, $dbh );
+		$rows = $features->rows;
+		print $offset . ' ' . $rows . "\n";
+		$offset += 10000;
 	}
-	my $features = $dbh->prepare($query);
-	$features->execute;
-	copy_rows( $features, $dbh );
 }
 
 ################################################ subroutine header begin ##
