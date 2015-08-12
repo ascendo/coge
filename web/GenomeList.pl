@@ -5,6 +5,7 @@ use strict;
 use CoGeX;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::Utils qw( commify );
+use CoGe::Core::Features qw( get_feature );
 use CGI;
 use HTML::Template;
 use Spreadsheet::WriteExcel;
@@ -999,7 +1000,8 @@ sub gc_content {
     my %args   = @_;
     my $featid = $args{featid};
     return unless $featid;
-    my ($feat) = $coge->resultset('Feature')->find($featid);
+#    my ($feat) = $coge->resultset('Feature')->find($featid);
+	my $feat = get_feature($featid);
     my ( $gc, $at ) = $feat->gc_content;
     my $html = "GC:" . ( 100 * $gc ) . "%" . ", AT:" . ( 100 * $at ) . "%";
     return $html;
@@ -1135,7 +1137,8 @@ sub codon_table {
     my $gstid  = $args{gstid};
     ( $featid, $gstid ) = split /_/, $featid if $featid =~ /_/;
     return unless $featid;
-    my ($feat) = $coge->resultset('Feature')->find($featid);
+#    my ($feat) = $coge->resultset('Feature')->find($featid);
+	my $feat = get_feature($featid);
     my ( $codon, $code_type ) =
       $feat->codon_frequency( counts => 1, gstid => $gstid );
     my %aa;
@@ -1198,7 +1201,8 @@ sub get_wobble_gc {
     my $gstid = $opts{gstid};
     ( $fid, $gstid ) = split /_/, $fid if ( $fid =~ /_/ );
     return unless $fid;
-    my ($feat) = $coge->resultset('Feature')->find($fid);
+#    my ($feat) = $coge->resultset('Feature')->find($fid);
+	my $feat = get_feature($fid);
     return unless $feat->type->name eq "CDS";
     return "No feature for id $fid" unless $feat;
     my ( $wgc, $wat ) = $feat->wobble_content( gstid => $gstid );

@@ -6,6 +6,7 @@ use CoGeX::Result::Feature;
 use CoGe::Accessory::LogUser;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::Utils qw( commify );
+use CoGe::Core::Features qw( get_feature );
 use CGI;
 use CGI::Ajax;
 use Data::Dumper;
@@ -404,7 +405,8 @@ sub get_features {
     }
 
     foreach my $fid ( keys %feats ) {
-        $feats{$fid} = $coge->resultset('Feature')->find($fid)
+#        $feats{$fid} = $coge->resultset('Feature')->find($fid)
+        $feats{$fid} = get_feature($fid)
           if $feats{$fid} eq "1";
     }
 

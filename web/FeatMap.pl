@@ -4,6 +4,7 @@ use CGI;
 use CGI::Ajax;
 use CoGe::Accessory::LogUser;
 use CoGe::Accessory::Web;
+use CoGe::Core::Features qw( get_feature );
 use HTML::Template;
 use Data::Dumper;
 use URI::Escape;
@@ -124,7 +125,8 @@ sub generate_table_data {
     #print STDERR Dumper \$feat_list;
     return unless @$feat_list;
     my @table;
-    $feat_list = [ map { $coge->resultset("Feature")->find($_) } @$feat_list ];
+#    $feat_list = [ map { $coge->resultset("Feature")->find($_) } @$feat_list ];
+    $feat_list = [ map { get_feature($_) } @$feat_list ];
     $feat_list = [
         sort {
                  $a->organism->name cmp $b->organism->name
@@ -172,7 +174,8 @@ sub generate_chromosome_images {
     my %data;
     my $filename;
     my ( @data, @no_data );
-    $feat_list = [ map { $coge->resultset("Feature")->find($_) } @$feat_list ];
+#    $feat_list = [ map { $coge->resultset("Feature")->find($_) } @$feat_list ];
+    $feat_list = [ map { get_feature($_) } @$feat_list ];
     $feat_list = [
         sort {
                  $a->organism->name cmp $b->organism->name
@@ -305,11 +308,12 @@ sub generate_feat_info {
     my $fid = shift;
     #print STDERR $fid, "\n";
     my $width    = 1000;
-    my $feat     = $coge->resultset('Feature')->find($fid);
+#    my $feat     = $coge->resultset('Feature')->find($fid);
+	my $feat     = get_feature($fid);
     my $hpp      = $feat->annotation_pretty_print_html();
     my $cs       = new CoGe::Graphics::Chromosome();
     my $ds       = $coge->resultset('Dataset')->find( $feat->dataset->id );
-    my $last_pos = $ds->last_chromosome_position( $feat->chr );
+    my $last_pos = $ds->last_chromosome_position( $feat->chromosome );
     $cs->chr_length($last_pos);
     $cs->iw($width);
     $cs->ih(200);
@@ -338,7 +342,7 @@ sub generate_feat_info {
             features => { gene => 1, cds => 1, mrna => 1, rna => 1, cns => 1 }
         },
         ds   => $ds,
-        chr  => $feat->chr,
+        chr  => $feat->chromosome,
         coge => $coge
     );
     $cs->overlap_adjustment(1);
@@ -348,7 +352,7 @@ sub generate_feat_info {
     my $subject_link = qq{
 Feature: $name<br>
 <a title='Click for Interactive Genome View' href = 'GenomeView.pl?chr=}
-      . $feat->chr
+      . $feat->chromosome
       . qq{&ds=}
       . $feat->dataset->id . qq{&x=}
       . $feat->start
@@ -361,7 +365,8 @@ Feature: $name<br>
 
 sub generate_feat_info {
     my $featid = shift;
-    my ($feat) = $coge->resultset("Feature")->find($featid);
+#    my ($feat) = $coge->resultset("Feature")->find($featid);
+    my ($feat) = get_feature($featid);
     unless ( ref($feat) =~ /Feature/i ) {
         return "Unable to retrieve Feature object for id: $featid";
     }

@@ -9,6 +9,7 @@ use CoGe::Accessory::Web qw(url_for);
 use CoGe::Accessory::Utils qw( commify get_link_coords );
 use CoGe::Accessory::blast_report;
 use CoGe::Accessory::blastz_report;
+use CoGe::Core::Features qw( get_feature );
 use CoGe::Core::Notebook qw(notebookcmp);
 use CoGe::Graphics::GenomeView;
 use CoGe::Graphics;
@@ -294,7 +295,8 @@ sub get_sequence {
             else {
                 $gstidt = $gstid;
             }
-            my $feat = $coge->resultset('Feature')->find($fid);
+#            my $feat = $coge->resultset('Feature')->find($fid);
+			my $feat = get_feature($fid);
             $fasta .=
               ref($feat) =~ /Feature/i
               ? $feat->fasta(
@@ -1741,7 +1743,8 @@ sub generate_feat_info {
     ( $featid, $hsp_num, $dsgid ) = split( /_/, $featid );
 
     my ($dsg)  = $coge->resultset('Genome')->find($dsgid);
-    my ($feat) = $coge->resultset("Feature")->find($featid);
+#    my ($feat) = $coge->resultset("Feature")->find($featid);
+	my $feat = get_feature($featid);
     unless ( ref($feat) =~ /Feature/i ) {
         return "Unable to retrieve Feature object for id: $featid";
     }
@@ -2365,7 +2368,8 @@ order by abs((start + stop)/2 - $mid) LIMIT 10};
 
     while ( my $res = $handle->fetchrow_arrayref() ) {
         my $fid = $res->[0];
-        my ($tmpfeat) = $coge->resultset('Feature')->find($fid);
+#        my ($tmpfeat) = $coge->resultset('Feature')->find($fid);
+		my $tmpfeat = get_feature($fid);
         next
           unless $tmpfeat->type->name =~ /gene/i
               || $tmpfeat->type->name =~ /rna/i
@@ -2612,7 +2616,8 @@ sub export_to_excel {
                 $length = $info->{length};
                 $qname  = $info->{qname};
             }
-            my ($feat) = $coge->resultset("Feature")->find($featid);
+#            my ($feat) = $coge->resultset("Feature")->find($featid);
+			my $feat = get_feature($featid);
             my ($name) = sort $feat->names;
             $worksheet->write( $i, 0, $qname );
             $worksheet->write( $i, 1, $org );
@@ -2660,7 +2665,8 @@ sub generate_tab_deliminated {
         next if $accn =~ /no$/;
         my ( $featid, $hsp_num, $dsgid ) = $accn =~ m/^(\d+)_(\d+)_(\d+)$/;
         my $dsg = $coge->resultset("Genome")->find($dsgid);
-        my ($feat) = $coge->resultset("Feature")->find($featid);
+#        my ($feat) = $coge->resultset("Feature")->find($featid);
+		my $feat = get_feature($featid);
 
         my ($name) = $feat->names;
         my $org = $dsg->organism->name;

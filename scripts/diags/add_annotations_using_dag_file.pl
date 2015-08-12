@@ -1,5 +1,6 @@
 #!/usr/bin/perl -w
 use strict;
+use CoGe::Core::Features qw( get_feature );
 use CoGeX;
 use Getopt::Long;
 
@@ -56,8 +57,10 @@ while (<IN>)
     my ($dsgid2, $chr2) = $line[4] =~/a(\d+)_(.+)/;
     my ($fid1) = $seq1[6];
     my ($fid2) = $seq2[6];
-    my $feat1 = $coge->resultset('Feature')->find($fid1);
-    my $feat2 = $coge->resultset('Feature')->find($fid2);
+#    my $feat1 = $coge->resultset('Feature')->find($fid1);
+#    my $feat2 = $coge->resultset('Feature')->find($fid2);
+	my $feat1 = get_feature($fid1);
+	my $feat2 = get_feature($fid2);
     if ($DEBUG)
       {
 	print "ANNOTATIONS:\n";

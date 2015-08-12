@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 
 use strict;
+use CoGe::Core::Features qw( get_feature );
 use CoGeX;
 
 my $coge = CoGeX->dbconnect();
@@ -15,9 +16,11 @@ while (<>)
     my @line = split /\t/;
     my @item1 = split /\|\|/,$line[1];
     my @item2 = split /\|\|/,$line[5];
-    my $feat1 = $coge->resultset('Feature')->find($item1[6]);
-    my $feat2 = $coge->resultset('Feature')->find($item2[6]);
-    my $name1;
+#    my $feat1 = $coge->resultset('Feature')->find($item1[6]);
+#    my $feat2 = $coge->resultset('Feature')->find($item2[6]);
+	my $feat1 = get_feature($item1[6]);
+	my $feat2 = get_feature($item2[6]);
+     my $name1;
     foreach ($feat1->names)
       {
 	$name1 = $_ unless $name1;

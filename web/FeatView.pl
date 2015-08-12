@@ -4,6 +4,7 @@ use CoGeX;
 use CoGe::Accessory::Web;
 use CoGe::Accessory::genetic_code;
 use CoGe::Accessory::Utils qw( get_link_coords );
+use CoGe::Core::Features qw( get_feature get_features );
 use CGI;
 use CGI::Carp 'fatalsToBrowser';
 use CGI::Ajax;
@@ -69,17 +70,23 @@ sub get_types {
     
     my $html;
     my %seen;
-    my $search = {
-        'feature_names.name' => $accn,
-        dataset_id           => $dsid,
-    };
-    $search->{feature_type_id} = $ftid if $ftid;
+#    my $search = {
+#        'feature_names.name' => $accn,
+#        dataset_id           => $dsid,
+#    };
+#    $search->{feature_type_id} = $ftid if $ftid;
+	my %search = (
+		name => $accn,
+		dataset_id => $dsid
+	);
+	$search{type_id} = $ftid if $ftid;
     
     my @opts =
       sort map { "<OPTION>$_</OPTION>" }
       grep     { !$seen{$_}++ }
       map      { $_->type->name }
-      $coge->resultset('Feature')->search( $search,, { join => 'feature_names' } );
+#      $coge->resultset('Feature')->search( $search,, { join => 'feature_names' } );
+	  get_features($search)
 
     if (@opts) {
         $html .= "<font class=small>Type count: " . scalar @opts . "</font>\n<BR>\n";
@@ -367,19 +374,22 @@ sub get_anno {
     my @feats;
     if ($accn) {
         foreach my $feat (
-            $coge->resultset('Feature')->search(
-                {
-                    'feature_names.name' => $accn,
+#            $coge->resultset('Feature')->search(
+			get_features(
+#                {
+#                    'feature_names.name' => $accn,
+                    'name' => $accn,
                     dataset_id           => $dataset_id
-                },
-                { join => 'feature_names' }
+#                },
+#                { join => 'feature_names' }
             ))
         {
             push @feats, $feat if ( $feat->type->name eq $type );
         }
     }
     else {
-        push @feats, $coge->resultset('Feature')->find($fid);
+#        push @feats, $coge->resultset('Feature')->find($fid);
+        push @feats, get_feature($fid);
     }
         
     my $anno;
@@ -547,20 +557,22 @@ sub get_data_source_info_for_accn {
         $org_ids{$org_id} = 1;
     }
     
-    my @feats = $coge->resultset('Feature')->search(
-        { 'feature_names.name' => $accn },
-        {  join       => 'feature_names',
-            'prefetch' => {
-                'dataset' => [
-                    'data_source',
-                    {
-                        'dataset_connectors' => {
-                            'genome' => [ 'organism', 'genomic_sequence_type' ]
-                        }
-                    }
-                ]
-            }
-        }
+#    my @feats = $coge->resultset('Feature')->search(
+    my @feats = get_features(
+#        { 'feature_names.name' => $accn },
+        'name' => $accn #,
+#        {  join       => 'feature_names',
+#            'prefetch' => {
+#                'dataset' => [
+#                    'data_source',
+#                    {
+#                        'dataset_connectors' => {
+#                            'genome' => [ 'organism', 'genomic_sequence_type' ]
+#                        }
+#                    }
+#                ]
+#            }
+#        }
     );
     
     my %sources;
@@ -678,7 +690,8 @@ sub gc_content {
     my %opts   = @_;
     my $featid = $opts{featid};
     return unless $featid;
-    my ($feat) = $coge->resultset('Feature')->find($featid);
+#    my ($feat) = $coge->resultset('Feature')->find($featid);
+	my $feat = get_feature($featid);
     my ( $gc, $at ) = $feat->gc_content;
     my $html = "GC:" . ( 100 * $gc ) . "%" . ", AT:" . ( 100 * $at ) . "%";
     return $html;
@@ -689,7 +702,8 @@ sub codon_table {
     my $featid = $opts{featid};
     my $gstid  = $opts{gstid};
     return unless $featid;
-    my ($feat) = $coge->resultset('Feature')->find($featid);
+#    my ($feat) = $coge->resultset('Feature')->find($featid);
+	my $feat = get_feature($featid);
     my ( $codon, $code_type ) =
       $feat->codon_frequency( counts => 1, gstid => $gstid );
     my %aa;
@@ -714,7 +728,8 @@ sub protein_table {
     my %opts   = @_;
     my $featid = $opts{featid};
     my $gstid  = $opts{gstid};
-    my ($feat) = $coge->resultset('Feature')->find($featid);
+#    my ($feat) = $coge->resultset('Feature')->find($featid);
+	my $feat = get_feature($featid);
     my $aa     = $feat->aa_frequency( counts => 1, gstid => $gstid );
     my $html   = "Amino Acid Usage";
     $html .= CoGe::Accessory::genetic_code->html_aa( data => $aa, counts => 1 );
@@ -725,7 +740,8 @@ sub codon_aa_alignment {
     my %opts   = @_;
     my $featid = $opts{featid};
     my $gstid  = $opts{gstid};
-    my ($feat) = $coge->resultset('Feature')->find($featid);
+#    my ($feat) = $coge->resultset('Feature')->find($featid);
+	my $feat = get_feature($featid);
     my $seq =
       join( " ", $feat->genomic_sequence( gstid => $gstid ) =~ /(...)/g );
     my $aa =

@@ -5,6 +5,7 @@ use CGI;
 use CGI::Ajax;
 use CoGeX;
 use CoGe::Accessory::Web;
+use CoGe::Core::Features qw( get_feature );
 use HTML::Template;
 use Data::Dumper;
 use File::Basename;
@@ -172,7 +173,8 @@ sub get_seqs {
             else {
                 ( $fid, $gstidt ) = ( $featid, $gstid );
             }
-            my ($feat) = $coge->resultset('Feature')->find($fid);
+#            my ($feat) = $coge->resultset('Feature')->find($fid);
+			my $feat = get_feature($fid);
             unless ($feat) {
                 $seqs .= ">Not found: $featid\n";
                 next;
@@ -228,7 +230,8 @@ sub get_json { # mdb added 2/28/14 for genfam integration
             else {
                 ( $fid, $gstidt ) = ( $featid, $gstid );
             }
-            my ($feat) = $coge->resultset('Feature')->find($fid);
+#            my ($feat) = $coge->resultset('Feature')->find($fid);
+			my $feat = get_feature($fid);
             next unless ($feat);
 
             my ($dsg) = $feat->dataset->genomes;

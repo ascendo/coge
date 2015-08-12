@@ -72,6 +72,156 @@ sub dataset_id {
 
 ################################################ subroutine header begin ##
 
+=head2 _clean_locations
+
+ Usage     :
+ Purpose   : returns wantarray of location objects.  Checks them for consistency due to some bad loads where locations had bad starts, stops, chromosomes and strands
+
+ Returns   : returns wantarray of location ojects
+ Argument  : none
+ Throws    :
+ Comments  : 
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub _clean_locations {
+	my $self = shift;
+	my @locs;
+	foreach my $loc (@{$self->{locations}}) {
+		next if $loc->{strand} ne $self->{strand};
+		next if $loc->{chromosome} ne $self->{chromosome};
+		next if $loc->{start} < $self->{start} || $loc->{start} > $self->{stop};
+		next if $loc->{stop} < $self->{start} || $loc->{stop} > $self->{stop};
+		push @locs, $loc;
+	} 
+	return wantarray ? @locs : \@locs;
+}
+
+################################################ subroutine header begin ##
+
+=head2 _estimate_lambda
+
+ Usage     : my $lambda = $feature->_estimate_lambda
+ Purpose   : estimates lambda for calculating blast bit scores.  Lambda is
+             a matrix-specific constant for normalizing raw blast scores
+ Returns   : a number, lambda
+ Argument  : optional hash
+             match    => the score for a nucleotide match. DEFAULT: 1
+             mismatch => the score for a nucleotide mismatch.  DEFAULT: -3
+             precision=> the different between the high and low estimate
+                         of lambda before lambda is returned.
+                         DEFAULT: 0.001
+ Throws    : a warning if there is a problem with the calcualted expected_score
+             or the match score is less than 0;
+ Comments  : Assumes an equal probability for each nucleotide.
+           : this routine is based on example 4-1 from
+           : BLAST: An essential guide to the Basic Local Alignment Search Tool
+           : by Korf, Yandell, and Bedell published by O'Reilly press.
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub _estimate_lambda {
+
+#this routine is based on example 4-1 from BLAST: An essential guide to the Basic Local Alignment Search Tool by Korf, Yandell, and Bedell published by O'Reilly press.
+	my $self      = shift;
+	my %opts      = @_;
+	my $match     = $opts{match} || 1;
+	my $mismatch  = $opts{mismatch} || -3;
+	my $precision = $opts{precision} || 0.001;
+
+	use constant Pn => 0.25;    #prob of any nucleotide
+	my $expected_score = $match * 0.25 + $mismatch * 0.75;
+	if ( $match <= 0 or $expected_score >= 0 ) {
+		warn qq{
+Problem with scores.  Match: $match (should be greater than 0).
+             Expected score: $expected_score (should be less than 0).
+};
+		return 0;
+	}
+
+	# calculate lambda
+	my ( $lambda, $high, $low ) = ( 1, 2, 0 );    # initial estimates
+	while ( $high - $low > $precision ) {         # precision
+		    # calculate the sum of all normalized scores
+		my $sum =
+		  Pn * Pn * exp( $lambda * $match ) * 4 + Pn * Pn *
+		  exp( $lambda * $mismatch ) * 12;
+
+		# refine guess at lambda
+		if ( $sum > 1 ) {
+			$high   = $lambda;
+			$lambda = ( $lambda + $low ) / 2;
+		}
+		else {
+			$low    = $lambda;
+			$lambda = ( $lambda + $high ) / 2;
+		}
+	}
+
+	# compute target frequency and H
+	my $targetID = Pn * Pn * exp( $lambda * $match ) * 4;
+	my $H        =
+	  $lambda * $match * $targetID + $lambda * $mismatch * ( 1 - $targetID );
+
+	# output
+	#    print "expscore: $expected_score\n";
+	#    print "lambda:   $lambda nats (", $lambda/log(2), " bits)\n";
+	#    print "H:        $H nats (", $H/log(2), " bits)\n";
+	#    print "%ID:      ", $targetID * 100, "\n";
+
+	return $lambda;
+}
+
+################################################ subroutine header begin ##
+
+=head2 _process_seq
+
+ Usage     :
+ Purpose   :
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub _process_seq {
+	my $self   = shift;
+	my %opts   = @_;
+	my $seq    = $opts{seq};
+	my $start  = $opts{start};
+	my $code1  = $opts{code1};
+	my $code2  = $opts{code2};
+	my $alter  = $opts{alter} || "X";
+	my $codonl = $opts{codonl} || 2;
+	my $seq_out;
+
+	for ( my $i = $start ; $i < CORE::length($seq) ; $i = $i + $codonl ) {
+		my $codon = uc( substr( $seq, $i, $codonl ) );
+		my $chr = $code1->{$codon} || $code2->{$codon};
+		unless ($chr) {
+			$chr = $alter if $alter;
+		}
+		$seq_out .= $chr if $chr;
+	}
+	return $seq_out;
+}
+
+################################################ subroutine header begin ##
+
 =head2 aa_frequency
 
  Usage     :
@@ -539,15 +689,17 @@ qq{<span class="data5 link" onclick = "window.open('OrganismView.pl?oid=}
 
 ################################################ subroutine header begin ##
 
-=head2 clean_locations
+=head2 blast_bit_score
 
- Usage     : $self->clean_locations
- Purpose   : returns wantarray of location objects.  Checks them for consistency due to some bad loads where locations had bad starts, stops, chromosomes and strands
-
- Returns   : returns wantarray of location ojects
- Argument  : none
+ Usage     : my $bit_score = $feature->blast_bit_score();
+ Purpose   : returns the blast bit score for the feature's self-self identical hit
+ Returns   : an int -- the blast bit score
+ Argument  : optional hash
+             match    => the score for a nucleotide match. DEFAULT: 1
+             mismatch => the score for a nucleotide mismatch.  DEFAULT: -3
  Throws    :
- Comments  : 
+ Comments  :
+           :
 
 See Also   :
 
@@ -555,17 +707,25 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub clean_locations {
-	my $self = shift;
-	my @locs;
-	foreach my $loc (@{$self->{locations}}) {
-		next if $loc->{strand} ne $self->{strand};
-		next if $loc->{chromosome} ne $self->{chromosome};
-		next if $loc->{start} < $self->{start} || $loc->{start} > $self->{stop};
-		next if $loc->{stop} < $self->{start} || $loc->{stop} > $self->{stop};
-		push @locs, $loc;
-	} 
-	return wantarray ? @locs : \@locs;
+sub blast_bit_score {
+	my $self       = shift;
+	my %opts       = @_;
+	my $gstid      = $opts{gstid};
+	my $match      = $opts{match} || 1;
+	my $mismatch   = $opts{mismatch} || -3;
+	my $seq_length = $opts{seq_length}
+	  || $opts{length};    #need a sequence length for calculation
+	my $lambda =
+	  $self->_estimate_lambda( match => $match, mismatch => $mismatch );
+	my $seq = $self->genomic_sequence( gstid => $gstid )
+	  unless $seq_length
+	  ;    #get sequence for feature if no seq_length has been passed in;
+	$seq_length = CORE::length($seq) if $seq;
+	warn
+"No genomic sequence could be obtained for this feature object.  Can't calculate a blast bit score.\n"
+	  unless $seq_length;
+	my $bs = sprintf( "%.0f", $lambda * $seq_length * $match / log(2) );
+	return $bs;
 }
 
 ################################################ subroutine header begin ##
@@ -643,6 +803,218 @@ sub dataset {
 
 ################################################ subroutine header begin ##
 
+=head2 fasta
+
+ Usage     :
+ Purpose   : returns a fasta formated sequence for the featre
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub fasta {
+	my $self = shift;
+	my %opts = @_;
+	my $col;
+	$col = $opts{col};
+	my $prot = $opts{protein} || $opts{prot};
+
+	#$col can be set to zero so we want to test for defined variable
+	$col = $opts{column} unless defined $col;
+	$col = $opts{wrap}   unless defined $col;
+	$col = 100           unless defined $col;
+	my $rc         = $opts{rc};
+	my $upstream   = $opts{upstream} || 0;
+	my $downstream = $opts{downstream} || 0;
+	my $name_only  = $opts{name_only};
+	my $fid_only   = $opts{fid_only};
+	my $add_fid    = $opts{add_fid};
+	my $sep   = $opts{sep};  #returns the header and sequence as separate items.
+	my $gstid = $opts{gstid};
+	my $gst;
+
+	if ($gstid) {
+		foreach my $dsg ( $self->dataset->genomes ) {
+			($gst) = $dsg->type if $dsg->type->id == $gstid;
+		}
+	}
+	if ( !$gst ) {
+		($gst) = $self->sequence_type();
+		$gstid = $gst->id if $gst;
+	}
+	my ($name) = $self->names;
+	my $head = ">";
+	if ( $name_only || $fid_only ) {
+		$head .= $name if $name_only;
+		$head .= "_fid_" if ( $name_only && ( $fid_only || $add_fid ) );
+		$head .= $self->id if $fid_only || $add_fid;
+	}
+	else {
+		$head .= $self->dataset->organism->name . "(v" . $self->version;
+		$head .= ", " . $gst->name if $gst;
+		$head .= ")"
+		  . ", Name: "
+		  . ( join( ", ", $self->names ) )
+		  . ", Type: "
+		  . $self->type->name
+		  . ", Feature Location: (Chr: "
+		  . $self->chromosome . ", "
+		  . $self->genbank_location_string . ")";
+		$head .= "fid:" . $self->id      if $add_fid;
+		$head .= " +up: $upstream"       if $upstream;
+		$head .= " +down: $downstream"   if $downstream;
+		$head .= " (reverse complement)" if $rc;
+	}
+	my ( $start, $stop ) = ( $self->start, $self->stop );
+	if ($rc) {
+		$start -= $downstream;
+		$stop += $upstream;
+	}
+	else {
+		$start -= $upstream;
+		$stop += $downstream;
+	}
+
+	$head .= " Genomic Location: $start-$stop" unless $name_only || $fid_only;
+	$Text::Wrap::columns = $col;
+	my $fasta;
+	if ($prot) {
+		my $seq = $self->genomic_sequence(
+			upstream   => $upstream,
+			downstream => $downstream,
+			gstid      => $gstid
+		  )
+		  if $upstream || $downstream;
+		foreach
+		  my $seq ( $self->protein_sequence( gstid => $gstid, seq => $seq ) )
+		{
+			$seq = join( "\n", wrap( "", "", $seq ) ) if $col;
+			$fasta .= $head . "\n" . $seq . "\n";
+		}
+	}
+	else {
+		my $seq = $self->genomic_sequence(
+			upstream   => $upstream,
+			downstream => $downstream,
+			gstid      => $gstid
+		);
+		$seq = $self->reverse_complement($seq) if $rc;
+		$seq = join( "\n", wrap( "", "", $seq ) ) if $col;
+		$fasta = $head . "\n" . $seq . "\n";
+		return $head, $seq if ($sep);
+	}
+	return $fasta;
+}
+
+################################################ subroutine header begin ##
+
+=head2 fasta_object
+
+ Usage     :
+ Purpose   :
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub fasta_object { # mdb added 2/28/14 for genfam
+    my $self = shift;
+    my %opts = @_;
+    my $col;
+    $col = $opts{col};
+    my $prot = $opts{protein} || $opts{prot};
+
+    #$col can be set to zero so we want to test for defined variable
+    $col = $opts{column} unless defined $col;
+    $col = $opts{wrap}   unless defined $col;
+    $col = 100           unless defined $col;
+    my $rc         = $opts{rc};
+    my $upstream   = $opts{upstream} || 0;
+    my $downstream = $opts{downstream} || 0;
+    my $gstid = $opts{gstid};
+    my $gst;
+
+    my %obj;
+
+    if ($gstid) {
+        foreach my $dsg ( $self->dataset->genomes ) {
+            ($gst) = $dsg->type if $dsg->type->id == $gstid;
+        }
+    }
+    if ( !$gst ) {
+        ($gst) = $self->sequence_type();
+        $gstid = $gst->id if $gst;
+    }
+    my ($name) = $self->names;
+
+    $obj{organism} = $self->dataset->organism->name . "(v" . $self->version
+        . ($gst ? ", " . $gst->name : '') . ")";
+    $obj{names} = $self->names;
+    $obj{type} = $self->type->name;
+    $obj{chromosome} = $self->chromosome;
+    $obj{location} = $self->genbank_location_string;
+    $obj{id} = $self->id;
+
+    my ( $start, $stop ) = ( $self->start, $self->stop );
+    if ($rc) {
+        $start -= $downstream;
+        $stop += $upstream;
+    }
+    else {
+        $start -= $upstream;
+        $stop += $downstream;
+    }
+
+    $obj{start} = $start;
+    $obj{stop} = $stop;
+
+    my $seq;
+    $Text::Wrap::columns = $col;
+    my $fasta;
+    if ($prot) {
+        $seq = $self->genomic_sequence(
+            upstream   => $upstream,
+            downstream => $downstream,
+            gstid      => $gstid
+          )
+          if $upstream || $downstream;
+        foreach
+          my $seq ( $self->protein_sequence( gstid => $gstid, seq => $seq ) )
+        {
+            $seq = join( "\n", wrap( "", "", $seq ) ) if $col;
+        }
+    }
+    else {
+        $seq = $self->genomic_sequence(
+            upstream   => $upstream,
+            downstream => $downstream,
+            gstid      => $gstid
+        );
+        $seq = $self->reverse_complement($seq) if $rc;
+        $seq = join( "\n", wrap( "", "", $seq ) ) if $col;
+    }
+
+    $obj{sequence} = $seq;
+
+    return \%obj;
+}
+
+################################################ subroutine header begin ##
+
 =head2 frame6_trans
 
  Usage     :
@@ -673,38 +1045,38 @@ sub frame6_trans {
 	  unless $seq;
 
 	my %seqs;
-	$seqs{"1"} = $self->process_seq(
+	$seqs{"1"} = $self->_process_seq(
 		seq    => $seq,
 		start  => 0,
 		code1  => $code,
 		codonl => 3
 	);
-	$seqs{"2"} = $self->process_seq(
+	$seqs{"2"} = $self->_process_seq(
 		seq    => $seq,
 		start  => 1,
 		code1  => $code,
 		codonl => 3
 	);
-	$seqs{"3"} = $self->process_seq(
+	$seqs{"3"} = $self->_process_seq(
 		seq    => $seq,
 		start  => 2,
 		code1  => $code,
 		codonl => 3
 	);
 	my $rcseq = $self->reverse_complement($seq);
-	$seqs{"-1"} = $self->process_seq(
+	$seqs{"-1"} = $self->_process_seq(
 		seq    => $rcseq,
 		start  => 0,
 		code1  => $code,
 		codonl => 3
 	);
-	$seqs{"-2"} = $self->process_seq(
+	$seqs{"-2"} = $self->_process_seq(
 		seq    => $rcseq,
 		start  => 1,
 		code1  => $code,
 		codonl => 3
 	);
-	$seqs{"-3"} = $self->process_seq(
+	$seqs{"-3"} = $self->_process_seq(
 		seq    => $rcseq,
 		start  => 2,
 		code1  => $code,
@@ -1004,6 +1376,34 @@ sub genomic_sequence {
 
 ################################################ subroutine header begin ##
 
+=head2 info
+
+ Usage     : $self->info
+ Purpose   : returns a string of information about the feature.
+
+ Returns   : returns a string
+ Argument  : none
+ Throws    :
+ Comments  : To be used to quickly generate a string about the feature
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub info {
+	my $self = shift;
+	my ($info) = $self->name . ' (' . $self->type->name . ')';
+	$info .= ': ' . $self->organism->name .
+	         ' (' . $self->dataset->source->name .
+	         ', v' . $self->dataset->first_genome->version .
+	         ', ' .  $self->dataset->first_genome->genomic_sequence_type->name . ')';
+	return $info;
+}
+
+################################################ subroutine header begin ##
+
 =head2 length
 
  Usage     :
@@ -1035,6 +1435,53 @@ sub length {
     }
 	
 	return $length;
+}
+
+################################################ subroutine header begin ##
+
+=head2 locs
+
+ Usage     :
+ Purpose   :
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub locs {
+	my $self = shift;
+	return $self->_clean_locations(@_);
+}
+
+################################################ subroutine header begin ##
+
+=head2 name
+
+ Usage     :
+ Purpose   :
+ Returns   :
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub name {
+	my $self = shift;
+	my ($name) = $self->names;
+	return $name;
 }
 
 ################################################ subroutine header begin ##
@@ -1129,46 +1576,6 @@ sub primary_name {
 		}
 	}
 	return undef;
-}
-
-################################################ subroutine header begin ##
-
-=head2 process_seq
-
- Usage     :
- Purpose   :
- Returns   :
- Argument  :
- Throws    :
- Comments  :
-           :
-
-See Also   :
-
-=cut
-
-################################################## subroutine header end ##
-
-sub process_seq {
-	my $self   = shift;
-	my %opts   = @_;
-	my $seq    = $opts{seq};
-	my $start  = $opts{start};
-	my $code1  = $opts{code1};
-	my $code2  = $opts{code2};
-	my $alter  = $opts{alter} || "X";
-	my $codonl = $opts{codonl} || 2;
-	my $seq_out;
-
-	for ( my $i = $start ; $i < CORE::length($seq) ; $i = $i + $codonl ) {
-		my $codon = uc( substr( $seq, $i, $codonl ) );
-		my $chr = $code1->{$codon} || $code2->{$codon};
-		unless ($chr) {
-			$chr = $alter if $alter;
-		}
-		$seq_out .= $chr if $chr;
-	}
-	return $seq_out;
 }
 
 ################################################ subroutine header begin ##
@@ -1273,6 +1680,36 @@ sub reverse_complement {
 	my $rcseq = reverse($seq);
 	$rcseq =~ tr/ATCGatcg/TAGCtagc/;
 	return $rcseq;
+}
+
+################################################ subroutine header begin ##
+
+=head2 sequence_type
+
+ Usage     :
+ Purpose   : returns the genomic_sequence_type object for the sequence
+ Returns   : wantarray -- may be more than one genomic_sequence_type sequences associated with this feature
+             looked up through dataset->genome_connector->genome->genomic_sequence_type
+ Argument  :
+ Throws    :
+ Comments  :
+           :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub sequence_type {
+	my $self = shift;
+	my %gst;
+	foreach my $dsg ( $self->dataset->genomes ) {
+		$gst{ $dsg->genomic_sequence_type->id } = $dsg->genomic_sequence_type;
+	}
+	my @gst = values %gst;
+	return shift @gst if scalar @gst == 1;    #only one result
+	return wantarray ? @gst : \@gst;
 }
 
 ################################################ subroutine header begin ##

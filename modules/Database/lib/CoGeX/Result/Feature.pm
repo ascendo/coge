@@ -1027,11 +1027,13 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub has_genomic_sequence {
-	my $self = shift;
-	return 1 if $self->dataset->has_genomic_sequence;
-	return 0;
-}
+# apparently not used
+#
+#sub has_genomic_sequence {
+#	my $self = shift;
+#	return 1 if $self->dataset->has_genomic_sequence;
+#	return 0;
+#}
 
 ################################################ subroutine header begin ##
 
@@ -1205,9 +1207,11 @@ See Also   : reverse_complement()
 
 ################################################## subroutine header end ##
 
-sub reverse_comp {
-	shift->reverse_complement(@_);
-}
+# apparently not used
+#
+#sub reverse_comp {
+#	shift->reverse_complement(@_);
+#}
 
 ################################################ subroutine header begin ##
 
@@ -1486,55 +1490,57 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub percent_translation_system {
-	my $self   = shift;
-	my %opts   = @_;
-	my $counts = $opts{counts};
-	my %code1  = (
-		"W" => 1,
-		"M" => 1,
-		"L" => 1,
-		"Y" => 1,
-		"C" => 1,
-		"I" => 1,
-
-		#		 "K"=>1, #majority in code2
-		"R" => 1,
-		"Q" => 1,
-		"V" => 1,
-		"E" => 1,
-
-	);
-	my $code1 = $opts{code1} || \%code1;
-	my %code2 = (
-		"F" => 1,
-		"S" => 1,
-		"T" => 1,
-		"N" => 1,
-		"P" => 1,
-		"H" => 1,
-		"A" => 1,
-		"D" => 1,
-		"G" => 1,
-		"K" => 1,
-	);
-	my $code2 = $opts{code2} || \%code2;
-	my ($seq) = $opts{seq} || $self->protein_sequence;
-	return ( 0, 0 ) unless $seq;
-	my ( $c1, $c2, $total ) = ( 0, 0, 0 );
-	foreach ( split //, $seq ) {
-		$_ = uc($_);
-		$c1++ if $code1->{$_};
-		$c2++ if $code2->{$_};
-		$total++;
-	}
-	if ($counts) {
-		return $c1, $c2, $total;
-	}
-	else {
-		return ( map { sprintf( "%.4f", $_ ) } $c1 / $total, $c2 / $total );
-	}
-}
+# apprently not used
+#
+#sub percent_translation_system {
+#	my $self   = shift;
+#	my %opts   = @_;
+#	my $counts = $opts{counts};
+#	my %code1  = (
+#		"W" => 1,
+#		"M" => 1,
+#		"L" => 1,
+#		"Y" => 1,
+#		"C" => 1,
+#		"I" => 1,
+#
+#		#		 "K"=>1, #majority in code2
+#		"R" => 1,
+#		"Q" => 1,
+#		"V" => 1,
+#		"E" => 1,
+#
+#	);
+#	my $code1 = $opts{code1} || \%code1;
+#	my %code2 = (
+#		"F" => 1,
+#		"S" => 1,
+#		"T" => 1,
+#		"N" => 1,
+#		"P" => 1,
+#		"H" => 1,
+#		"A" => 1,
+#		"D" => 1,
+#		"G" => 1,
+#		"K" => 1,
+#	);
+#	my $code2 = $opts{code2} || \%code2;
+#	my ($seq) = $opts{seq} || $self->protein_sequence;
+#	return ( 0, 0 ) unless $seq;
+#	my ( $c1, $c2, $total ) = ( 0, 0, 0 );
+#	foreach ( split //, $seq ) {
+#		$_ = uc($_);
+#		$c1++ if $code1->{$_};
+#		$c2++ if $code2->{$_};
+#		$total++;
+#	}
+#	if ($counts) {
+#		return $c1, $c2, $total;
+#	}
+#	else {
+#		return ( map { sprintf( "%.4f", $_ ) } $c1 / $total, $c2 / $total );
+#	}
+#}
 
 ################################################ subroutine header begin ##
 
