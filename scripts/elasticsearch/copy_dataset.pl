@@ -8,4 +8,4 @@ use CoGe::Core::Features;
 my $dataset_id = shift;
 my $index = shift || 'coge'; # optional index name
 
-CoGe::Core::Features::copy($dataset_id, $index);
+CoGe::Core::Features::copy_dataset($dataset_id, $index);

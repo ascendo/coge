@@ -93,6 +93,7 @@ sub bulk_index {
 
 	if ($ids) {
 		for (my $i=0; $i<$num_docs; $i++) {
+			warn Dumper $docs->[$i];
 			$bulk->index({ id => $ids->[$i], source => $docs->[$i]})
 		}
 	} else {
