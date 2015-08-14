@@ -76,6 +76,7 @@ sub get_types { #FIXME dup'ed in SynFind.pl, move into Core::Features
     my ( $dsid, $gstid ) = split(/_/, $opts{dsid});
     my $accn = $opts{accn};
     my $ftid = $opts{ftid};
+    print STDERR 'get_types ', Dumper \%opts, "\n";
     
     my %seen;
 # mdb removed 8/11/15 - ES migration
@@ -92,21 +93,23 @@ sub get_types { #FIXME dup'ed in SynFind.pl, move into Core::Features
 
     # mdb added 8/11/15 - ES migration
     my $rs = get_features(
-        dataset_id => $dsid,
-        name       => $accn
+        dataset_id => ($dsid ? $dsid : undef),
+        name       => ($accn ? $accn : undef),
+        type_id    => ($ftid ? $ftid : undef)
     );
     my @opts = 
-        sort map { "<OPTION>$_</OPTION>" }
+        sort map { "<option>$_</option>" }
         grep     { !$seen{$_}++ }
         map      { get_type_name($_->{type}) } @$rs;
+    print STDERR Dumper $rs, "\n";
 
     my $html;
     if (@opts) {
-        $html .= "<font class=small>Type count: " . scalar @opts . "</font>\n<BR>\n";
-        $html .= qq{<SELECT id="Type_name" SIZE="10" MULTIPLE onChange="get_anno(['args__accn','accn_select','args__type','Type_name', 'args__dsid','dsid', 'args__gstid','args__$gstid'],[show_anno])" >\n};
-        $html .= join( "\n", @opts );
-        $html .= "\n</SELECT>\n";
-        $html =~ s/OPTION/OPTION SELECTED/; # set the first option to be selected
+        $html .= "<font class='small'>Type count: " . scalar @opts . "</font><br>";
+        $html .= qq{<select id="Type_name" size="10" MULTIPLE onChange="get_anno(['args__accn','accn_select','args__type','Type_name', 'args__dsid','dsid', 'args__gstid','args__$gstid'],[show_anno])">};
+        $html .= join('', @opts);
+        $html .= "</select>";
+        $html =~ s/option/option SELECTED/; # set the first option to be selected
     }
     else { 
         return qq{<input type="hidden" id="Type_name">-------};
@@ -153,11 +156,8 @@ sub cogesearch {
     my $type     = $opts{type};
     my $org_id   = $opts{org_id};
     my $org_name = $opts{org_name};
-    $org_name = undef if $org_name =~ /^search$/i;
-#    my $org_desc = $opts{org_desc};
-#    $org_desc = undef if $org_desc =~ /^search$/i;
-    my $org_desc = $org_name;
-    print STDERR Dumper \%opts, "\n";
+    my $org_desc = $opts{org_desc};
+    #print STDERR 'cogesearch ', Dumper \%opts, "\n";
     
     my $blank      = qq{<input type="hidden" id="accn_select">};
     my $weak_query = "Query needs to be better defined.";
@@ -166,56 +166,58 @@ sub cogesearch {
     }
     
     # Search for features
-    my %seen;
-    my $search = {};
-    $search->{feature_type_id} = $type if $type;
-    $search->{'organism.name'} = { like => "%" . $org_name . "%" } if $org_name;
-    $search->{'organism.description'} = { like => "%" . $org_desc . "%" } if $org_desc;
-    my $join = {
-        join => [
-            {   'feature' => {
-                    'dataset' =>
-                      { 'dataset_connectors' => { 'genome' => 'organism' } }
-                }
-            }
-        ]
-    };
-    push @{ $join->{join} }, 'feature_annotation' if $anno; #=>['annotation',]};
-
-    #trying to get fulltext to work (and be fast!)
-    my @names;
-    if ($accn) {
-        my $search1 = dclone($search);
-        $search1->{"me.name"} = $accn;
-        push @names, $coge->resultset('FeatureName')->search( $search1, $join );
-        unless (@names) {
-            push @names,
-              $coge->resultset('FeatureName')->search( $search, $join )->search_literal( 'MATCH(me.name) AGAINST (?)', $accn );
-        }
-    }
-    if ($anno) {
-        push @names,
-          $coge->resultset('FeatureName')->search( $search, $join )->search_literal( 'MATCH(annotation) AGAINST (?)', $anno );
-    }
-    
-    # Build options for select dropdown
-    my @opts;
-    foreach my $name (@names) {
-        my $item = $name->name;
-        next if $seen{ uc($item) };
-        $seen{ uc($item) }++;
-        push @opts, "<option>$item</option>";
-    }
-    
-    #################### mdb added 8/11/15 for ES migration
+# mdb removed 8/11/15 - ES migration
+#    my %seen;
+#    my $search = {};
+#    $search->{feature_type_id} = $type if $type;
+#    $search->{'organism.name'} = { like => "%" . $org_name . "%" } if $org_name;
+#    $search->{'organism.description'} = { like => "%" . $org_desc . "%" } if $org_desc;
+#    my $join = {
+#        join => [
+#            {   'feature' => {
+#                    'dataset' =>
+#                      { 'dataset_connectors' => { 'genome' => 'organism' } }
+#                }
+#            }
+#        ]
+#    };
+#    push @{ $join->{join} }, 'feature_annotation' if $anno; #=>['annotation',]};
+#
+#    #trying to get fulltext to work (and be fast!)
+#    my @features;
+#    if ($accn) {
+#        my $search1 = dclone($search);
+#        $search1->{"me.name"} = $accn;
+#        push @features, $coge->resultset('FeatureName')->search( $search1, $join );
+#        unless (@features) {
+#            push @features,
+#              $coge->resultset('FeatureName')->search( $search, $join )->search_literal( 'MATCH(me.name) AGAINST (?)', $accn );
+#        }
+#    }
+#    if ($anno) {
+#        push @features,
+#          $coge->resultset('FeatureName')->search( $search, $join )->search_literal( 'MATCH(annotation) AGAINST (?)', $anno );
+#    }
+    # mdb added 8/11/15 for ES migration
     my @ds_ids;
     if ($org_name) {
         my @organisms = search_organisms($coge, $org_name);
         @ds_ids = map { $_->id } map { $_->datasets } @organisms;
     }
-    warn 'matt!!!!!!!!!!', Dumper \@ds_ids;
+    my %search;
+    $search{dataset_id} = \@ds_ids if @ds_ids;
+    $search{name}       = $accn if $accn;
+    $search{annotation} = $anno if $anno;
+    $search{type_id}    = $type if $type;
+    my @features = get_features(%search);
     
-    ####################
+    # Build options for select dropdown
+    my (%seen, @opts);
+    foreach (@features) {
+        my $name = $_->name;
+        next if $seen{ lc($name) }++;
+        push @opts, "<option>$name</option>";
+    }
     
     # Check for too many results to display
     my $max_results = 10_000;
@@ -296,164 +298,158 @@ sub cogesearch_featids {
     return join "||", map { $_ . "::" . $seen{$_} } keys %seen;
 }
 
-sub cogesearch_featids_old {
-    my %opts = @_;
-    my $accn = $opts{accn};
-    $accn =~ s/^\s+//;
-    $accn =~ s/\s+$//;
-    my $anno = $opts{anno};
-    $anno =~ s/^\s+//;
-    $anno =~ s/\s+$//;
-    my $type     = $opts{type};
-    my $org_id   = $opts{org_id};
-    my $org_name = $opts{org_name};
-    $org_name = undef if $org_name =~ /^search$/i;
-    my $org_desc = $opts{org_desc};
-    $org_desc = undef if $org_desc =~ /^search$/i;
-    my @org_ids;
-    $org_id = "all" unless $org_id;
-
-    if ( $org_id eq "all" ) {
-        my ( $otype, $search ) = ( "name", $org_name )
-          if $org_name && $org_name ne "Search";
-        ( $otype, $search ) = ( "desc", $org_desc )
-          if $org_desc && $org_desc ne "Search";
-        @org_ids = get_orgs( id_only => 1, type => $otype, search => $search );
-    }
-    else {
-        push @org_ids, $org_id;
-    }
-    my $feat_accn_wild = $opts{feat_name_wild};
-    my $feat_anno_wild = $opts{feat_anno_wild};
-    my $blank          = qq{<input type="hidden" id="accn_select">};
-    my $weak_query     = "Query needs to be better defined.";
-    if ( !$accn && !$anno ) {
-        return $weak_query . $blank unless $org_id && $type;
-    }
-    my $html;
-    my %seen;
-    my @opts;
-    $accn = "%" . $accn
-      if $accn && ( $feat_accn_wild eq "both" || $feat_accn_wild eq "left" );
-    $accn = $accn . "%"
-      if $accn && ( $feat_accn_wild eq "both" || $feat_accn_wild eq "right" );
-    $anno = "%" . $anno
-      if $anno && ( $feat_anno_wild eq "both" || $feat_anno_wild eq "left" );
-    $anno = $anno . "%"
-      if $anno && ( $feat_anno_wild eq "both" || $feat_anno_wild eq "right" );
-    my $search = {};
-
-    if ( $accn =~ /%/ ) {
-        $search->{'me.name'} = { like => $accn } if $accn;
-    }
-    else {
-        $search->{'me.name'} = $accn if $accn;
-    }
-    if ( $anno =~ /%/ ) {
-        $search->{'annotation'} = { like => $anno } if $anno;
-    }
-    else {
-        $search->{'annotation'} = $anno if $anno;
-    }
-    $search->{feature_type_id} = $type if $type;
-    $search->{organism_id}{-in} = [@org_ids] if @org_ids;
-    my $join =
-      { 'feature' => { 'dataset' => { 'dataset_connectors' => 'genome' } } };
-    $join->{'feature'} = [ 'dataset', 'annotations' ] if $anno;
-    foreach my $name (
-        $coge->resultset('FeatureName')->search(
-            $search,
-            {
-                join     => $join,
-                prefetch => {
-                    'feature' => {
-                        'dataset' => {
-                            'dataset_connectors' =>
-                              { 'genome' => 'genomic_sequence_type' }
-                        }
-                    }
-                }
-            }
-        )
-      )
-    {
-        my $key =
-          $name->feature_id . "_" . $name->feature->dataset->sequence_type->id;
-        $seen{$key} = $name->name . " (" . $name->feature->type->name;
-        $seen{$key} .= ", " . $name->feature->dataset->sequence_type->name;
-        $seen{$key} .= ")";
-    }
-    return join "||", map { $_ . "::" . $seen{$_} } keys %seen;
-}
+#sub cogesearch_featids_old {
+#    my %opts = @_;
+#    my $accn = $opts{accn};
+#    $accn =~ s/^\s+//;
+#    $accn =~ s/\s+$//;
+#    my $anno = $opts{anno};
+#    $anno =~ s/^\s+//;
+#    $anno =~ s/\s+$//;
+#    my $type     = $opts{type};
+#    my $org_id   = $opts{org_id};
+#    my $org_name = $opts{org_name};
+#    $org_name = undef if $org_name =~ /^search$/i;
+#    my $org_desc = $opts{org_desc};
+#    $org_desc = undef if $org_desc =~ /^search$/i;
+#    my @org_ids;
+#    $org_id = "all" unless $org_id;
+#
+#    if ( $org_id eq "all" ) {
+#        my ( $otype, $search ) = ( "name", $org_name )
+#          if $org_name && $org_name ne "Search";
+#        ( $otype, $search ) = ( "desc", $org_desc )
+#          if $org_desc && $org_desc ne "Search";
+#        @org_ids = get_orgs( id_only => 1, type => $otype, search => $search );
+#    }
+#    else {
+#        push @org_ids, $org_id;
+#    }
+#    my $feat_accn_wild = $opts{feat_name_wild};
+#    my $feat_anno_wild = $opts{feat_anno_wild};
+#    my $blank          = qq{<input type="hidden" id="accn_select">};
+#    my $weak_query     = "Query needs to be better defined.";
+#    if ( !$accn && !$anno ) {
+#        return $weak_query . $blank unless $org_id && $type;
+#    }
+#    my $html;
+#    my %seen;
+#    my @opts;
+#    $accn = "%" . $accn
+#      if $accn && ( $feat_accn_wild eq "both" || $feat_accn_wild eq "left" );
+#    $accn = $accn . "%"
+#      if $accn && ( $feat_accn_wild eq "both" || $feat_accn_wild eq "right" );
+#    $anno = "%" . $anno
+#      if $anno && ( $feat_anno_wild eq "both" || $feat_anno_wild eq "left" );
+#    $anno = $anno . "%"
+#      if $anno && ( $feat_anno_wild eq "both" || $feat_anno_wild eq "right" );
+#    my $search = {};
+#
+#    if ( $accn =~ /%/ ) {
+#        $search->{'me.name'} = { like => $accn } if $accn;
+#    }
+#    else {
+#        $search->{'me.name'} = $accn if $accn;
+#    }
+#    if ( $anno =~ /%/ ) {
+#        $search->{'annotation'} = { like => $anno } if $anno;
+#    }
+#    else {
+#        $search->{'annotation'} = $anno if $anno;
+#    }
+#    $search->{feature_type_id} = $type if $type;
+#    $search->{organism_id}{-in} = [@org_ids] if @org_ids;
+#    my $join = { 'feature' => { 'dataset' => { 'dataset_connectors' => 'genome' } } };
+#    $join->{'feature'} = [ 'dataset', 'annotations' ] if $anno;
+#    foreach my $name (
+#        $coge->resultset('FeatureName')->search(
+#            $search,
+#            {   join     => $join,
+#                prefetch => {
+#                    'feature' => {
+#                        'dataset' => {
+#                            'dataset_connectors' =>
+#                              { 'genome' => 'genomic_sequence_type' }
+#                        }
+#                    }
+#                }
+#            }
+#        ))
+#    {
+#        my $key = $name->feature_id . "_" . $name->feature->dataset->sequence_type->id;
+#        $seen{$key} = $name->name . " (" . $name->feature->type->name;
+#        $seen{$key} .= ", " . $name->feature->dataset->sequence_type->name;
+#        $seen{$key} .= ")";
+#    }
+#    return join "||", map { $_ . "::" . $seen{$_} } keys %seen;
+#}
 
 sub get_anno {
     my %opts            = @_;
     my $accn            = $opts{accn};
     my $featlist_choice = $opts{featlist_choice};
-
     my $fid        = $opts{fid};
     my $type       = $opts{type};
-    my $dataset_id = $opts{dsid};
-    my $gstid      = $opts{gstid};
-    ( $fid, $gstid ) = split /_/, $featlist_choice if $featlist_choice;
+#    my $dsid       = $opts{dsid};
+#    my $gstid      = $opts{gstid};
+    my ( $dsid, $gstid ) = split(/_/, $opts{dsid});
+    ( $fid, $gstid ) = split(/_/, $featlist_choice) if $featlist_choice;
     return unless $accn || $fid;
+    print STDERR 'get_anno ', Dumper \%opts, "\n";
 
     my @feats;
     if ($accn) {
         foreach my $feat (
-#            $coge->resultset('Feature')->search(
-			get_features(
-#                {
-#                    'feature_names.name' => $accn,
-                    'name' => $accn,
-                    dataset_id           => $dataset_id
-#                },
-#                { join => 'feature_names' }
+#           # mdb removed 8/12/15 - ES migration
+#           $coge->resultset('Feature')->search(
+#               {
+#                   'feature_names.name' => $accn,
+#                   dataset_id => $dsid
+#               },
+#               { join => 'feature_names' }
+            # mdb added 8/12/15 - ES migration
+            get_features(
+                name => $accn,
+                dataset_id => $dsid
             ))
-        {
-            push @feats, $feat if ( $feat->type->name eq $type );
+        { 
+            push @feats, $feat if ( get_type_name($feat->{type}) eq $type );#$feat->type->name eq $type );
         }
     }
     else {
-#        push @feats, $coge->resultset('Feature')->find($fid);
-        push @feats, get_feature($fid);
+        push @feats, get_feature($fid); #push @feats, $coge->resultset('Feature')->find($fid);
     }
         
     my $anno;
     $anno = qq{<h4>Annotation count: <span class="note">(} . scalar @feats . qq{)</span></h4><hr>}
       if scalar @feats;
 
-    my $i = 0;
+    #my $i = 0;
     foreach my $feat (@feats) {
         next unless $feat;
         my ($dsg) = $feat->dataset->genomes;
         return "Restricted Access" unless $USER->has_access_to_genome($dsg);
         return "Deleted" if $dsg->deleted;
-        #next if ($feat->dataset->restricted && !$USER->has_access_to_dataset($feat->dataset));
         
-        $i++;
+        #$i++;
         my $featid = $feat->id;
-        my $chr    = $feat->chr;
-        my $rc     = 0;
-        my $pro    = 0;
-        my $ds     = $feat->dataset->id;
-        my $x      = $feat->start;
-        my $z      = 4;
+        my $chr    = $feat->chromosome;
+        my $ds     = $feat->dataset_id;
+        #my $x      = $feat->start;
+        #my $z      = 4;
         my $gid    = $dsg->id;
         $anno .= qq{<div class="coge-buttonset"><span class="ui-button ui-corner-all" onClick="window.open('FastaView.pl?fid=$featid&gstid=$gstid');">Get Sequence</span>};
-        $anno .= qq{<span class="ui-button ui-corner-all" onClick="window.open('CoGeBlast.pl?featid=$fid;gstid=$gstid');">CoGeBlast</span>};
+        $anno .= qq{<span class="ui-button ui-corner-all" onClick="window.open('CoGeBlast.pl?featid=$featid;gstid=$gstid');">CoGeBlast</span>};
         my ($a, $b) = get_link_coords($feat->start, $feat->stop);
         $anno .= #qq{<span class="ui-button ui-corner-all" onClick="window.open('GenomeView.pl?chr=$chr&ds=$ds&x=$x&z=$z;gstid=$gstid');">Genome Browser</span>}; # mdb removed 11/20/13 issue 254
             qq{<span class="ui-button ui-corner-all" onClick="window.open('GenomeView.pl?gid=$gid&loc=$chr:$a..$b');">Genome Browser</span>}; # mdb added 11/20/13 issue 254
         $anno .= qq{<span class="ui-button ui-corner-all" onClick="window.open('SynFind.pl?fid=$featid');">SynFind</span>};
-
         #$anno .= qq{<DIV id="exp$i"><input type="button" value = "Click for expression tree" onClick="gen_data(['args__Generating expression view image'],['exp$i']);show_express(['args__}.$accn.qq{','args__}.'1'.qq{','args__}.$i.qq{'],['exp$i']);"></DIV>};
         $anno .= qq{<span class="ui-button ui-corner-all" onClick="update_featlist(['args__accn', 'args__$accn','args__type', 'args__$type','args__fid', 'args__$featid', 'args__gstid','args__$gstid'],[add_to_featlist]);\$('#feat_list').dialog('option', 'width', 500).dialog('open');">Add to list</span></div>}
           if $accn;
 
         eval {
-            $anno .= join "\n<hr>\n",
-            $feat->annotation_pretty_print_html( gstid => $gstid );
+            $anno .= join("<hr>", $feat->annotation_pretty_print_html( gstid => $gstid ));
         };
 
         if ( $feat->type->name eq "CDS" ) {
@@ -645,7 +641,7 @@ sub get_data_source_info_for_accn {
         }
     }
     
-    my $html = qq{<SELECT name="dsid" id="dsid" MULTIPLE SIZE="10" onChange="get_types_chain();">};
+    my $html = qq{<select name="dsid" id="dsid" MULTIPLE size="10" onChange="get_types_chain();">};
     my $count = 0;
     foreach my $title (
         sort { $sources{$b}{v} <=> $sources{$a}{v} || $a cmp $b }
@@ -655,13 +651,13 @@ sub get_data_source_info_for_accn {
         my $id    = $sources{$title}{id};
         my $gstid = $sources{$title}{gstid};
         my $val   = $id . "_" . $gstid;
-        $html .= qq{  <option value="$val" >$title\n};
+        $html .= qq{<option value="$val">$title</option>};
         $html =~ s/option/option selected/ unless $count;
         $count++;
     }
-    $html .= qq{</SELECT>\n};
+    $html .= qq{</select>\n};
     
-    return ("<font class='small'>Dataset count: " . $count . "</font>\n<BR>\n" . $html );
+    return ("<font class='small'>Dataset count: " . $count . "</font>\n<br>\n" . $html );
 }
 
 sub get_orgs { # mdb changed 8/12/15 -- combined name and description search
