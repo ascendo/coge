@@ -62,6 +62,7 @@ See Also   :
 sub bulk_index {
 	my $type = shift;    # type name
 	my $docs = shift;    # ref to array of documents
+	my $ids = shift;     # array ref of doc ids, optional. will generate ids if not passed in
 	return unless ( $type && $docs );
 	my ( $url, $index ) = _get_settings();
 	my $num_docs = scalar(@$docs);
@@ -80,6 +81,8 @@ sub bulk_index {
 		on_error => sub {
 			my ( $action, $response, $i ) = @_;
 			warn 'Elasticsearch::bulk_index ERROR';
+			warn Dumper $action;
+			warn Dumper $response;
 		},
 
 		#        on_success => sub {
@@ -88,19 +91,23 @@ sub bulk_index {
 		#        },
 	);
 
-	# Allocate unique ID's for documents
-	my $last_id = get_ids( $type, $num_docs );
-	my $id = $last_id - $num_docs + 1;
-
-	#warn 'last_id=', $last_id, ' first_id=', $id, ' num_ids=', $num_docs;
-
-	# Add documents
-	foreach my $source (@$docs) {
-		my $doc = {
-			id     => $id++,
-			source => $source
-		};
-		$bulk->index($doc);
+	if ($ids) {
+		for (my $i=0; $i<$num_docs; $i++) {
+			warn Dumper $docs->[$i];
+			$bulk->index({ id => $ids->[$i], source => $docs->[$i]})
+		}
+	} else {
+		# Allocate unique ID's for documents
+		my $last_id = get_ids( $type, $num_docs );
+		my $id = $last_id - $num_docs + 1;
+		# Add documents
+		foreach my $source (@$docs) {
+			my $doc = {
+				id     => $id++,
+				source => $source
+			};
+			$bulk->index($doc);
+		}
 	}
 	my $result = $bulk->flush;
 	if (   !$result

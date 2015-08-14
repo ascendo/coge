@@ -36,12 +36,11 @@ use strict;
 use warnings;
 
 use CoGe::Accessory::Web qw(get_defaults);
-use CoGe::Core::Elasticsearch qw(search get);
+use CoGe::Core::Elasticsearch qw(bulk_index get search);
 use CoGeX;
 use Data::Dumper;
 use Encode qw(encode);
 use JSON::XS;
-use Search::Elasticsearch;
 
 our $DEBUG = 1;
 
@@ -70,10 +69,10 @@ sub chromosome_exists {
 
 ################################################ subroutine header begin ##
 
-=head2 copy
+=head2 copy_dataset
 
  Usage     :
- Purpose   : copy a particular dataset from the database to elasticsearch
+ Purpose   : copy the features for a particular dataset from the database to elasticsearch
  Returns   :
  Argument  : dataset_id
  Throws    :
@@ -85,14 +84,44 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub copy {
+sub copy_dataset {
 	my $dataset_id = shift;
 	my $index = shift || 'coge';    # optional index name
 
 	my $dbh = CoGeX->dbconnect( get_defaults() )->storage->dbh;
 	my $query =
-'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature WHERE dataset_id='
+'SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id WHERE dataset_id='
 	  . $dataset_id;
+	my $features = $dbh->prepare($query);
+	$features->execute;
+	copy_rows( $features, $dbh, $index );
+}
+
+################################################ subroutine header begin ##
+
+=head2 copy_feature
+
+ Usage     :
+ Purpose   : copy a particular feature from the database to elasticsearch
+ Returns   :
+ Argument  : dataset_id
+ Throws    :
+ Comments  :
+
+See Also   :
+
+=cut
+
+################################################## subroutine header end ##
+
+sub copy_feature {
+	my $feature_id = shift;
+	my $index = shift || 'coge';    # optional index name
+
+	my $dbh = CoGeX->dbconnect( get_defaults() )->storage->dbh;
+	my $query =
+'SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id WHERE feature_id='
+	  . $feature_id;
 	my $features = $dbh->prepare($query);
 	$features->execute;
 	copy_rows( $features, $dbh, $index );
@@ -119,23 +148,28 @@ See Also   :
 sub copy_rows {
 	my $features = shift;
 	my $dbh      = shift;
-	my $index    = shift || 'coge';                # optional index name
-	my $e        = Search::Elasticsearch->new();
+	my $index    = shift || 'coge';    # optional index name
 
+	my @docs;
+	my @ids;
 	while ( my $feature = $features->fetchrow_arrayref ) {
-		my $feature_id = $feature->[0];
-		my $body = { type => int $feature->[1], dataset => int $feature->[2] };
-		if ( $feature->[3] ) {
-			$body->{start} = int $feature->[3];
-		}
+		my $feature_id = int $feature->[0];
+		my $body       = {
+			type_id   => int $feature->[1],
+			type_name => $feature->[2],
+			dataset   => int $feature->[3]
+		};
 		if ( $feature->[4] ) {
-			$body->{stop} = int $feature->[4];
+			$body->{start} = int $feature->[4];
 		}
 		if ( $feature->[5] ) {
-			$body->{strand} = int $feature->[5];
+			$body->{stop} = int $feature->[5];
 		}
 		if ( $feature->[6] ) {
-			$body->{chromosome} = $feature->[6];
+			$body->{strand} = int $feature->[6];
+		}
+		if ( $feature->[7] ) {
+			$body->{chromosome} = $feature->[7];
 		}
 		my $db_names = $dbh->prepare(
 'SELECT name,description,primary_name FROM feature_name WHERE feature_id='
@@ -183,22 +217,19 @@ sub copy_rows {
 				type       => int $db_annotation->[1]
 			};
 			if ( $db_annotation->[2] ) {
-				$annotation->{link} = $annotation->[2];
+				$annotation->{link} = $db_annotation->[2];
 			}
 			push @$annotations, $annotation;
 		}
 		if ($annotations) {
 			$body->{annotations} = $annotations;
 		}
-		print $feature_id . ' ';
 
-		$e->index(
-			index => $index,
-			type  => 'features',
-			id    => $feature_id,
-			body  => $body
-		);
+		push @docs, $body;
+		push @ids,  $feature_id;
+		print $feature_id . ' ';
 	}
+	bulk_index( 'features', \@docs, \@ids );
 }
 
 ################################################ subroutine header begin ##
@@ -208,7 +239,7 @@ sub copy_rows {
  Usage     :
  Purpose   : copy features from db to elasticsearch
  Returns   :
- Argument  : limit (num features to send), [offset (record to start at)]
+ Argument  : offset (record to start at), [limit (num features to send)]
  Throws    :
  Comments  :
 
@@ -218,19 +249,27 @@ See Also   :
 
 ################################################## subroutine header end ##
 
+use constant BATCH_SIZE => 1;
+
 sub dump {
-	my $limit  = shift;
 	my $offset = shift;
+	my $limit  = shift || BATCH_SIZE;
 	my $dbh    = CoGeX->dbconnect( get_defaults() )->storage->dbh;
-	my $query =
-'SELECT feature_id,feature_type_id,dataset_id,start,stop,strand,chromosome FROM feature LIMIT '
-	  . $limit;
-	if ($offset) {
-		$query .= ' OFFSET ' . $offset;
+
+	my $rows = BATCH_SIZE;
+	while ( $rows == BATCH_SIZE ) {
+		my $query =
+'SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id LIMIT '
+		  . $limit
+		  . ' OFFSET '
+		  . $offset;
+		my $features = $dbh->prepare($query);
+		$features->execute;
+		copy_rows( $features, $dbh );
+		$rows = $features->rows;
+		print $offset . ' ' . $rows . "\n";
+		$offset += BATCH_SIZE;
 	}
-	my $features = $dbh->prepare($query);
-	$features->execute;
-	copy_rows( $features, $dbh );
 }
 
 ################################################ subroutine header begin ##
@@ -796,19 +835,20 @@ See Also   :
 
 sub query {
 	my $opts       = shift;
-	my $dataset_id = $opts->{dataset_id};  # dataset id or array ref of ids
-	my $name       = $opts->{name};        # feature name or array ref of names
-	my $annotation = $opts->{annotation};  # annotation string or array ref of strings
-	my $type_id    = $opts->{type_id};     # feature type id or array ref of ids
+	my $dataset_id = $opts->{dataset_id};   # dataset id or array ref of ids
+	my $name       = $opts->{name};         # feature name or array ref of names
+	my $annotation =
+	  $opts->{annotation};    # annotation string or array ref of strings
+	my $type_id = $opts->{type_id};    # feature type id or array ref of ids
 	my $chromosome = $opts->{chromosome} || $opts->{chr};
 	my $start      = $opts->{start};
 	my $stop       = $opts->{stop};
 	my %query;
-	$query{dataset}      = $dataset_id if $dataset_id;
-	$query{'names.name'} = $name       if $name;
+	$query{dataset}                  = $dataset_id if $dataset_id;
+	$query{'names.name'}             = $name       if $name;
 	$query{'annotations.annotation'} = $annotation if $annotation;
-	$query{type}         = $type_id    if $type_id;
-	$query{chromosome}   = $chromosome if defined $chromosome;
+	$query{type}                     = $type_id    if $type_id;
+	$query{chromosome}               = $chromosome if defined $chromosome;
 
 	if ( defined $start ) {
 		$stop = $start unless defined $stop;

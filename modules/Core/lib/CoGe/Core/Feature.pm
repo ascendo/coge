@@ -306,7 +306,7 @@ sub annotation_pretty_print {
 	my $location = "Chr " . $chr . " ";
 	$location .= join( ", ",
 		map    { $_->start . "-" . $_->stop }
-		  sort { $a->start <=> $b->start } $self->clean_locations );
+		  sort { $a->start <=> $b->start } $self->_clean_locations );
 	$location .= "(" . $strand . ")";
 
 	#my $location = "Chr ".$chr. "".$start."-".$stop.""."(".$strand.")";
@@ -1150,7 +1150,7 @@ sub genbank_location_string {
 	my $string;
 	my $count = 0;
 	my $comp  = 0;
-	foreach my $loc ( sort { $a->{start} <=> $b->{start} } $self->clean_locations() ) {
+	foreach my $loc ( sort { $a->{start} <=> $b->{start} } $self->_clean_locations() ) {
 
 		#?
 		# $comp = 1 if $loc->strand =~ "-";
@@ -1298,7 +1298,7 @@ sub genomic_sequence {
 	my @sequences;
 	my %locs =
 	  map { ( $_->{start}, $_->{stop} ) }
-	  $self->clean_locations();
+	  $self->_clean_locations;
 	  ; #in case a mistake happened when loading locations and there are multiple ones with the same start
 	 #print STDERR Dumper \%locs, "\n";
 	my @locs = map { [ $_, $locs{$_} ] } sort { $a <=> $b } keys %locs;
@@ -1424,7 +1424,7 @@ sub length {
 	my $self = shift;
 	my $length;
 	
-	map { $length += ( $_->{stop} - $_->{start} + 1 ) } $self->clean_locations;
+	map { $length += ( $_->{stop} - $_->{start} + 1 ) } $self->_clean_locations;
 	
     unless (defined $length) { # mdb added 4/20/15 COGE-610 for cases where there are no locations
         $length = $self->stop - $self->start + 1;
