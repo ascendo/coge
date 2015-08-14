@@ -89,9 +89,11 @@ sub copy_dataset {
 	my $index = shift || 'coge';    # optional index name
 
 	my $dbh = CoGeX->dbconnect( get_defaults() )->storage->dbh;
-	my $query =
-'SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id WHERE dataset_id='
-	  . $dataset_id;
+	my $query = qq{
+	    SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome 
+	    FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id 
+	    WHERE dataset_id=$dataset_id
+	};
 	my $features = $dbh->prepare($query);
 	$features->execute;
 	copy_rows( $features, $dbh, $index );
@@ -119,9 +121,11 @@ sub copy_feature {
 	my $index = shift || 'coge';    # optional index name
 
 	my $dbh = CoGeX->dbconnect( get_defaults() )->storage->dbh;
-	my $query =
-'SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id WHERE feature_id='
-	  . $feature_id;
+	my $query = qq{
+	    SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome 
+	    FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id 
+	    WHERE feature_id=$feature_id
+	};
 	my $features = $dbh->prepare($query);
 	$features->execute;
 	copy_rows( $features, $dbh, $index );
@@ -171,8 +175,7 @@ sub copy_rows {
 		if ( $feature->[7] ) {
 			$body->{chromosome} = $feature->[7];
 		}
-		my $db_names = $dbh->prepare(
-'SELECT name,description,primary_name FROM feature_name WHERE feature_id='
+		my $db_names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id='
 			  . $feature_id );
 		$db_names->execute;
 		my $names;
@@ -189,8 +192,7 @@ sub copy_rows {
 		if ($names) {
 			$body->{names} = $names;
 		}
-		my $db_locations = $dbh->prepare(
-'SELECT start,stop,strand,chromosome FROM location WHERE feature_id='
+		my $db_locations = $dbh->prepare('SELECT start,stop,strand,chromosome FROM location WHERE feature_id='
 			  . $feature_id );
 		$db_locations->execute;
 		my $locations;
@@ -206,8 +208,7 @@ sub copy_rows {
 		if ($locations) {
 			$body->{locations} = $locations;
 		}
-		my $db_annotations = $dbh->prepare(
-'SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id='
+		my $db_annotations = $dbh->prepare('SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id='
 			  . $feature_id );
 		$db_annotations->execute;
 		my $annotations;
@@ -258,11 +259,12 @@ sub dump {
 
 	my $rows = BATCH_SIZE;
 	while ( $rows == BATCH_SIZE ) {
-		my $query =
-'SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id LIMIT '
-		  . $limit
-		  . ' OFFSET '
-		  . $offset;
+		my $query = qq{
+            SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome 
+            FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id 
+            LIMIT $limit 
+            OFFSET $offset
+		};
 		my $features = $dbh->prepare($query);
 		$features->execute;
 		copy_rows( $features, $dbh );
@@ -539,7 +541,6 @@ sub get_features_in_region {
 		push @dsids, map { $_->id } $genome->datasets if $genome;
 	}
 	if ($count_flag) {
-
 		#        return $self->resultset('Feature')->count(
 		#            {
 		#                "me.chromosome" => $chr,
