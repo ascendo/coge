@@ -62,7 +62,7 @@ See Also   :
 sub bulk_index {
 	my $type = shift;    # type name
 	my $docs = shift;    # ref to array of documents
-	my $ids = shift;     # array ref of doc ids, optional. will generate ids if not passed in
+	my $ids = shift;     # array ref of doc ids, optional (will generate ids if undefined)
 	return unless ( $type && $docs );
 	my ( $url, $index ) = _get_settings();
 	my $num_docs = scalar(@$docs);
@@ -84,23 +84,24 @@ sub bulk_index {
 			warn Dumper $action;
 			warn Dumper $response;
 		},
-
-		#        on_success => sub {
-		#            my ($action,$response,$i) = @_;
-		#            warn 'Elasticsearch::bulk_index SUCCESS';
-		#        },
+		#on_success => sub {
+		#    my ($action,$response,$i) = @_;
+		#    warn 'Elasticsearch::bulk_index SUCCESS';
+		#},
 	);
 
+    # Add documents
 	if ($ids) {
+	    # Use supplied IDs
 		for (my $i=0; $i<$num_docs; $i++) {
-			warn Dumper $docs->[$i];
+			#warn Dumper $docs->[$i];
 			$bulk->index({ id => $ids->[$i], source => $docs->[$i]})
 		}
-	} else {
+	}
+	else {
 		# Allocate unique ID's for documents
 		my $last_id = get_ids( $type, $num_docs );
 		my $id = $last_id - $num_docs + 1;
-		# Add documents
 		foreach my $source (@$docs) {
 			my $doc = {
 				id     => $id++,
@@ -109,6 +110,8 @@ sub bulk_index {
 			$bulk->index($doc);
 		}
 	}
+	
+	# Flush docs and verify
 	my $result = $bulk->flush;
 	if (   !$result
 		|| !$result->{items}
@@ -116,7 +119,6 @@ sub bulk_index {
 	{
 		warn 'Elasticsearch::bulk_index: ERROR: incomplete load, indexed ',
 		  scalar( @{ $result->{items} } ), ', expected ', $num_docs;
-
 		#warn Dumper $result;
 		return 0;
 	}
