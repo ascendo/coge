@@ -296,11 +296,11 @@ function onEnter(e) {
 
 <div id="anno" class="coge-result"><TMPL_VAR NAME="FID_ANNO"></div>
 
-<div class="dialog" id="codon_table" title="Codon Usage Table"></div>
-<div class="dialog" id="aa_table" title="Amino Acid Usage Table"></div>
-<div class="dialog" id="codon_aa_alignment" title="Amino Acid Usage Table"></div>
+<div class="hidden dialog" id="codon_table" title="Codon Usage Table"></div>
+<div class="hidden dialog" id="aa_table" title="Amino Acid Usage Table"></div>
+<div class="hidden dialog" id="codon_aa_alignment" title="Amino Acid Usage Table"></div>
 
-<div class="dialog" title="Feature List" id="feat_list">
+<div class="hidden dialog" title="Feature List" id="feat_list">
     <span class="small count">Feature Count: 0</span><br>
     <select id="featlist_choice" size="10" MULTIPLE onchange="get_anno(['args__featlist_choice','featlist_choice'],[show_anno])">
     	<option id="blank" value=null>No Feature Selected</option>
@@ -312,5 +312,5 @@ function onEnter(e) {
     <span class="ui-button ui-corner-all" id="remove" onClick="$('#'+$('#featlist_choice').val()).remove();counting();">Remove</span><br><br>
     <span class="ui-button ui-corner-all" id="clear" onClick="clear_feat_list()">Clear</span><br>
 
-    <div id=add_all_search></div>
+    <div id="add_all_search"></div>
 </div>
