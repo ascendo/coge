@@ -64,7 +64,7 @@ See Also   :
 sub chromosome_exists {
 	my %opts = @_;
 	return search_exists( 'features',
-		{ dataset => $opts{dataset_id}, chromosome => $opts{chromosome} } );
+		{ dataset_id => $opts{dataset_id}, chromosome => $opts{chromosome} } );
 }
 
 ################################################ subroutine header begin ##
@@ -158,25 +158,26 @@ sub copy_rows {
 	my @ids;
 	while ( my $feature = $features->fetchrow_arrayref ) {
 		my $feature_id = int $feature->[0];
-		my $body       = {
-			type_id   => int $feature->[1],
-			type_name => $feature->[2],
-			dataset   => int $feature->[3]
+		my $body = {
+			type_id    => int $feature->[1],
+			type_name  => $feature->[2],
+			dataset_id => int $feature->[3]
 		};
-		if ( $feature->[4] ) {
+		if ( defined $feature->[4] ) {
 			$body->{start} = int $feature->[4];
 		}
-		if ( $feature->[5] ) {
+		if ( defined $feature->[5] ) {
 			$body->{stop} = int $feature->[5];
 		}
-		if ( $feature->[6] ) {
+		if ( defined $feature->[6] ) {
 			$body->{strand} = int $feature->[6];
 		}
-		if ( $feature->[7] ) {
+		if ( defined $feature->[7] ) {
 			$body->{chromosome} = $feature->[7];
 		}
-		my $db_names = $dbh->prepare('SELECT name,description,primary_name FROM feature_name WHERE feature_id='
-			  . $feature_id );
+		my $db_names = $dbh->prepare(qq{
+		    SELECT name,description,primary_name FROM feature_name WHERE feature_id=$feature_id
+		});
 		$db_names->execute;
 		my $names;
 		while ( my $db_name = $db_names->fetchrow_arrayref ) {
@@ -192,8 +193,9 @@ sub copy_rows {
 		if ($names) {
 			$body->{names} = $names;
 		}
-		my $db_locations = $dbh->prepare('SELECT start,stop,strand,chromosome FROM location WHERE feature_id='
-			  . $feature_id );
+		my $db_locations = $dbh->prepare(qq{
+		    SELECT start,stop,strand,chromosome FROM location WHERE feature_id=$feature_id
+		});
 		$db_locations->execute;
 		my $locations;
 		while ( my $db_location = $db_locations->fetchrow_arrayref ) {
@@ -201,15 +203,16 @@ sub copy_rows {
 			  {
 				start      => int $db_location->[0],
 				stop       => int $db_location->[1],
-				strand     => int $db_location->[2],
-				chromosome => $db_location->[3]
+				#strand     => int $db_location->[2],
+				#chromosome => $db_location->[3]
 			  };
 		}
 		if ($locations) {
 			$body->{locations} = $locations;
 		}
-		my $db_annotations = $dbh->prepare('SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id='
-			  . $feature_id );
+		my $db_annotations = $dbh->prepare(qq{
+		    SELECT annotation,annotation_type_id,link FROM feature_annotation WHERE feature_id=$feature_id
+		});
 		$db_annotations->execute;
 		my $annotations;
 		while ( my $db_annotation = $db_annotations->fetchrow_arrayref ) {
@@ -323,7 +326,6 @@ sub get_chromosome_names {
 	my $results = search( 'features', $query, $options );
 	my @chromosome_names;
 	if ( $results->{hits}->{total} ) {
-
 		foreach ( @{ $results->{hits}->{hits} } ) {
 			push @chromosome_names, $_->{_source}->{chromosome};
 		}
@@ -535,9 +537,7 @@ sub get_features_in_region {
 	my @dsids;
 	push @dsids, $dataset_id if $dataset_id;
 	if ($genome_id) {
-		my $genome =
-		  CoGeX->dbconnect( get_defaults() )->resultset('Genome')
-		  ->find($genome_id);
+		my $genome = CoGeX->dbconnect( get_defaults() )->resultset('Genome')->find($genome_id);
 		push @dsids, map { $_->id } $genome->datasets if $genome;
 	}
 	if ($count_flag) {
@@ -845,10 +845,10 @@ sub query {
 	my $start      = $opts->{start};
 	my $stop       = $opts->{stop};
 	my %query;
-	$query{dataset}                  = $dataset_id if $dataset_id;
+	$query{dataset_id}               = $dataset_id if $dataset_id;
 	$query{'names.name'}             = $name       if $name;
 	$query{'annotations.annotation'} = $annotation if $annotation;
-	$query{type}                     = $type_id    if $type_id;
+	$query{type_id}                  = $type_id    if $type_id;
 	$query{chromosome}               = $chromosome if defined $chromosome;
 
 	if ( defined $start ) {
