@@ -122,7 +122,7 @@ sub get_genome_info_details {
 
     # Count
     my $chr_num = $dsg->chromosome_count();
-    $html .= qq{<tr><td class="title5">Chromosome count:</td</td>}
+    $html .= qq{<tr><td class="title5">Chromosomes/contigs:</td</td>}
         . qq{<td class="data5">} . commify($chr_num);
 
     # Histogram
@@ -1827,8 +1827,8 @@ sub get_tbl {
     $args{basename} = sanitize_name($dsg->organism->name);
 
     my $workflow = $JEX->create_workflow(name => "Export Tbl");
-    my ($output, %task) = generate_tbl(%args);
-    $workflow->add_job(\%task);
+    my ($output, $task) = generate_tbl(%args);
+    $workflow->add_job($task);
 
     my $response = $JEX->submit_workflow($workflow);
     say STDERR "RESPONSE ID: " . $response->{id};
@@ -1874,8 +1874,8 @@ sub get_bed {
     $args{basename} = sanitize_name($dsg->organism->name);
 
     my $workflow = $JEX->create_workflow(name => "Export bed file");
-    my ($output, %task) = generate_bed(%args);
-    $workflow->add_job(\%task);
+    my ($output, $task) = generate_bed(%args);
+    $workflow->add_job($task);
 
     my $response = $JEX->submit_workflow($workflow);
     say STDERR "RESPONSE ID: " . $response->{id};
@@ -1949,8 +1949,8 @@ sub export_file_to_irods {
     $args{basename} = sanitize_name($dsg->organism->name);
 
     my $workflow = $JEX->create_workflow(name => "Export " . $file_type);
-    my ($output, %task) = $generate_func->(%args);
-    $workflow->add_job(\%task);
+    my ($output, $task) = $generate_func->(%args);
+    $workflow->add_job($task);
 
     my $response = $JEX->submit_workflow($workflow);
     say STDERR "RESPONSE ID: " . $response->{id};
