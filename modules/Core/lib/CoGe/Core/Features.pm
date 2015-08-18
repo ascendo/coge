@@ -270,7 +270,7 @@ sub dump {
 		$features->execute;
 		copy_rows( $features, $dbh );
 		$rows = $features->rows;
-		print $offset . ' ' . $rows . "\n";
+		print "\n" . $offset . ' ' . $rows . "\n";
 		$offset += BATCH_SIZE;
 	}
 }
