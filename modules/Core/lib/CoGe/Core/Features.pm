@@ -250,7 +250,7 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-use constant BATCH_SIZE => 1000;
+use constant BATCH_SIZE => 10000;
 
 sub dump {
 	my $offset = shift;

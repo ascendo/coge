@@ -7,4 +7,4 @@ use CoGe::Core::Features;
 
 select((select(STDOUT), $|=1)[0]);
 
-CoGe::Core::Features::dump(0, 0); # offset, limit
+CoGe::Core::Features::dump(1, 0); # offset, limit
