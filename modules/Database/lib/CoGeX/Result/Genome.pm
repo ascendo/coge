@@ -802,6 +802,11 @@ sub chromosome_lengths {
 	return CoGe::Core::Chromosomes->new($self->id)->lengths;
 }
 
+sub chromosome_lengths_by_name {
+    my $self = shift;
+    return CoGe::Core::Chromosomes->new($self->id)->lengths_by_name;
+}
+
 ################################################ subroutine header begin ##
 
 =head2 percent_gc
