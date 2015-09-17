@@ -9,7 +9,7 @@ use CoGe::Accessory::Web qw(get_defaults);
 
 BEGIN {
 	use Exporter 'import';
-	@EXPORT_OK = qw(bulk_index get search search_exists);
+	@EXPORT_OK = qw(create_index delete_index bulk_index get search search_exists);
 }
 
 our $DEBUG = 1;
@@ -59,11 +59,13 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-sub bulk_index {
+sub bulk_index { #TODO convert args to list format
+    my $index = shift;   # optional index name
 	my $type = shift;    # type name
 	my $docs = shift;    # ref to array of documents
 	my $ids = shift;     # array ref of doc ids, optional (will generate ids if undefined)
 	return unless ( $type && $docs );
+	
 	my ( $url, $index ) = _get_settings();
 	my $num_docs = scalar(@$docs);
 
@@ -72,17 +74,15 @@ sub bulk_index {
 	my $bulk = $es->bulk_helper(
 		index       => $index,
 		type        => $type,
-		max_count   => 0,        #10_000, # batch size
-		max_size    => 0,
+		max_count   => 10_000,    # batch size (operations)
+		max_size    => 1_000_000, # batch size (bytes)
 		on_conflict => sub {
 			my ( $action, $response, $i, $version ) = @_;
-			warn 'Elasticsearch::bulk_index CONFLICT';
+			warn 'Elasticsearch::bulk_index CONFLICT', Dumper $response;
 		},
 		on_error => sub {
 			my ( $action, $response, $i ) = @_;
-			warn 'Elasticsearch::bulk_index ERROR';
-			warn Dumper $action;
-			warn Dumper $response;
+			warn 'Elasticsearch::bulk_index ERROR', Dumper $response;
 		},
 		#on_success => sub {
 		#    my ($action,$response,$i) = @_;
@@ -95,7 +95,7 @@ sub bulk_index {
 	    # Use supplied IDs
 		for (my $i=0; $i<$num_docs; $i++) {
 			#warn Dumper $docs->[$i];
-			$bulk->index({ id => $ids->[$i], source => $docs->[$i]})
+			$bulk->index({ id => $ids->[$i], source => $docs->[$i]});#$bulk->create({ id => $ids->[$i], source => $docs->[$i]});
 		}
 	}
 	else {
@@ -107,23 +107,51 @@ sub bulk_index {
 				id     => $id++,
 				source => $source
 			};
-			$bulk->index($doc);
+			$bulk->index($doc);#$bulk->create($doc);
 		}
 	}
 	
 	# Flush docs and verify
 	my $result = $bulk->flush;
+	my $num_indexed = scalar( @{ $result->{items} } );
 	if (   !$result
-		|| !$result->{items}
-		|| scalar( @{ $result->{items} } ) != $num_docs )
+	    || $result->{errors})
 	{
-		warn 'Elasticsearch::bulk_index: ERROR: incomplete load, indexed ',
-		  scalar( @{ $result->{items} } ), ', expected ', $num_docs;
-		#warn Dumper $result;
-		return 0;
+	    warn 'Elasticsearch::bulk_index: ERROR: ', Dumper $result->{errors};
+        return 0;
 	}
+#	elsif (!$result->{items}
+#		|| scalar( @{ $result->{items} } ) != $num_docs )
+#	{
+#		warn 'Elasticsearch::bulk_index: ERROR: incomplete load, indexed ',
+#		  $num_indexed, ', expected ', $num_docs;
+#		#warn Dumper $result;
+#		return 0;
+#	}
 
-	return 1;
+	return 1;#$num_indexed;
+}
+
+sub delete_index {
+    my $index_name = shift;
+    return unless $index_name;
+    
+    my ( $url ) = _get_settings();
+
+    # Connect and delete index
+    my $es = Search::Elasticsearch->new( nodes => $url );
+    $es->indices->delete( index => $index_name );
+}
+
+sub create_index {
+    my $index_name = shift;
+    return unless $index_name;
+    
+    my ( $url ) = _get_settings();
+
+    # Connect and create index
+    my $es = Search::Elasticsearch->new( nodes => $url );
+    $es->indices->create( index => $index_name ); 
 }
 
 ################################################ subroutine header begin ##
