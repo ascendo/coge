@@ -398,7 +398,8 @@ sub get_features {
     # Execute query
     my $query = qq{
         SELECT f.feature_id AS id, f.feature_type_id AS type_id, ft.name AS type_name,
-            f.start AS start, f.stop AS stop, f.strand AS strand, f.chromosome AS chromosome
+            f.start AS start, f.stop AS stop, f.strand AS strand, f.chromosome AS chromosome,
+            f.dataset_id AS dataset_id
         FROM dataset_connector AS dc 
         JOIN feature AS f ON (f.dataset_id=dc.dataset_id) 
         JOIN feature_type AS ft ON (ft.feature_type_id=f.feature_type_id)
@@ -412,10 +413,16 @@ sub get_features {
 
     my $sth = $dbh->prepare($query);
     $sth->execute();
-    my $results = $sth->fetchall_hashref(['chromosome', 'id']);
-    #print STDERR Dumper $results, "\n";
     
-    return $results;
+    if (wantarray) {
+        my $results = $sth->fetchall_arrayref({});
+        return @$results;
+    }
+    else {
+        my $results = $sth->fetchall_hashref(['chromosome', 'id']);
+        #print STDERR Dumper $results, "\n";
+        return $results;
+    }
 }
 
 
@@ -533,8 +540,10 @@ sub get_datasets {
             d.link AS link, d.version AS version, d.date AS date
         FROM dataset_connector AS dc
         JOIN dataset AS d ON (dc.dataset_id=d.dataset_id)
-        WHERE genome_id=$genome_id
     };
+    if ($genome_id) {
+        $query .= " WHERE (dc.genome_id=$genome_id)";
+    }
     my $sth = $dbh->prepare($query);
     $sth->execute();
     
