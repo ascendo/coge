@@ -747,7 +747,7 @@ function user_info(userID, search_type) {
                             } else {
                             	genList = genList + "<span>";
                             }
-        					genList = genList + current.name + " <a href=\"GenomeInfo.pl?gid=" + current.id + "\">Info </a>";
+        					genList = genList + current.label + " <a href=\"GenomeInfo.pl?gid=" + current.id + "\">Info </a>";
         					genList = genList + "<button class='access' onclick='share_dialog(" + current.id + ", 2, " + current.restricted + ")'>Edit Access</button>";
         					genList = genList + "</span></td></tr>";
         					genCounter++;
@@ -776,7 +776,7 @@ function user_info(userID, search_type) {
         					} else {
         						expList = expList + "<span>";
         					}
-        					expList = expList + current.name + " (id" + current.id + ") <a href=\"ExperimentView.pl?eid=" + current.id + "\">Info </a>";
+        					expList = expList + current.label + " (id" + current.id + ") <a href=\"ExperimentView.pl?eid=" + current.id + "\">Info </a>";
         					expList = expList + "<button class='access' onclick='share_dialog(" + current.id + ", 3, " + current.restricted + ")'>Edit Access</button>";
         					expList = expList + "</span></td></tr>";
         					expCounter++;
@@ -805,7 +805,7 @@ function user_info(userID, search_type) {
         					} else {
         						noteList = noteList + "<span>";
         					}
-        					noteList = noteList + current.name + " <a href=\"NotebookView.pl?lid=" + current.id + "\">Info </a>";
+        					noteList = noteList + current.label + " <a href=\"NotebookView.pl?lid=" + current.id + "\">Info </a>";
         					noteList = noteList + "<button class='access' onclick='share_dialog(" + current.id + ", , " + current.restricted + ")'>Edit Access</button>";
         					noteList = noteList + "</span></td></tr>";
         					noteCounter++;
@@ -1110,27 +1110,32 @@ function wait_to_search(search_func, search_term) {
 }
 
 //The following javascript deals with Tab2, the Jobs tab
+var job_flag = false;
 function get_jobs() {
-	cancel_update("jobs");
-	$.ajax({
-		dataType: 'json',
-	    data: {
-	        jquery_ajax: 1,
-	        fname: 'get_jobs',
-	        time_range: 0,
-	        running_only: running_only,
-	    },
-	    success: function(data) {
-	        jobs.load(data.jobs);
-	        entries = data.jobs.length;
-	        $("#filter_busy").hide();
-	        update_filter();
-	        jobs_init = true;
-	    },
-	    complete: function(data) {
-	    	schedule_update(5000);
-	    }
-	});
+	if(!job_flag) {
+		job_flag = true;
+		cancel_update("jobs");
+		$.ajax({
+			dataType: 'json',
+		    data: {
+		        jquery_ajax: 1,
+		        fname: 'get_jobs',
+		        time_range: 0,
+		        running_only: running_only,
+		    },
+		    success: function(data) {
+		        jobs.load(data.jobs);
+		        entries = data.jobs.length;
+		        $("#filter_busy").hide();
+		        update_filter();
+		        jobs_init = true;
+		    },
+		    complete: function(data) {
+		    	job_flag = false;
+		    	schedule_update(5000);
+		    }
+		});
+	}
 }
 
 function update_filter() {
@@ -1184,12 +1189,12 @@ function schedule_update(delay) {
 }
 
 function cancel_update(page) {
-	if(page == "jobs") {
+	//if(page == "jobs") {
 		clearTimeout(jobs_timers['update']);
-	}
-	if(page == "hist") {
+	//}
+	//if(page == "hist") {
 		clearTimeout(hist_timers['update']);
-	}
+	//}
 }
 
 function cancel_job() {
@@ -1241,29 +1246,34 @@ function submit_task(task, predicate) {
 }
 
 
-//The following Javascript deals with Tab3, the History page 
+//The following Javascript deals with Tab3, the History page
+var hist_flag = false;
 function get_history() {
-	$("#loading3").show();
-	$.ajax({
-		dataType: 'json',
-		data: {
-			jquery_ajax: 1,
-			fname: 'get_history_for_user',
-			time_range: 0,
-		},
-		success : function(data) {
-			hist.load(data);
-			hist_entries = data.length;
-			last_hist_update = data[0].date_time;
-			updateHistFilter();
-			
-			hist_init = true;
-			$("#loading3").hide();
-		},
-	    complete: function(data) {
-	    	schedule_update(5000);
-	    }
-	});
+	if(!hist_flag) {
+		hist_flag = true;
+		$("#loading3").show();
+		$.ajax({
+			dataType: 'json',
+			data: {
+				jquery_ajax: 1,
+				fname: 'get_history_for_user',
+				time_range: 0,
+			},
+			success : function(data) {
+				hist.load(data);
+				hist_entries = data.length;
+				last_hist_update = data[0].date_time;
+				updateHistFilter();
+				
+				hist_init = true;
+				$("#loading3").hide();
+			},
+		    complete: function(data) {
+		    	hist_flag = false;
+		    	schedule_update(5000);
+		    }
+		});
+	}
 }
 
 function update_history() {

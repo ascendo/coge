@@ -253,7 +253,7 @@ See Also   :
 
 ################################################## subroutine header end ##
 
-use constant BATCH_SIZE => 1;
+use constant BATCH_SIZE => 1000;
 
 sub dump {
 	my $offset = shift;
@@ -265,6 +265,7 @@ sub dump {
 		my $query = qq{
             SELECT feature_id,feature.feature_type_id,name,dataset_id,start,stop,strand,chromosome 
             FROM feature JOIN feature_type ON feature.feature_type_id=feature_type.feature_type_id 
+            ORDER BY feature_id
             LIMIT $limit 
             OFFSET $offset
 		};
@@ -272,7 +273,7 @@ sub dump {
 		$features->execute;
 		copy_rows( $features, $dbh );
 		$rows = $features->rows;
-		print $offset . ' ' . $rows . "\n";
+		print "\n" . $offset . ' ' . $rows . "\n";
 		$offset += BATCH_SIZE;
 	}
 }
