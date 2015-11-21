@@ -76,6 +76,9 @@ sub get {
     elsif ($message->{type} eq "analyze_expression") {
         $builder = CoGe::Builder::Expression::MeasureExpression->new($request);
     }
+    elsif ($message->{type} eq "analyze_diversity") {
+        $builder = CoGe::Builder::PopGen::SummaryStats->new($request);
+    }
     else {
         print STDERR "PipelineFactory::get unknown type\n";
         return;
