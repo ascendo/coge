@@ -14,6 +14,7 @@ use CoGe::Core::Metadata qw(to_annotations);
 use CoGe::Builder::CommonTasks;
 use CoGe::Builder::Common::Alignment qw(build);
 use CoGe::Builder::Expression::qTeller qw(build);
+use CoGe::Builder::PopGen::SummaryStats qw(build);
 use CoGe::Builder::SNP::CoGeSNPs qw(build);
 use CoGe::Builder::SNP::Samtools qw(build);
 use CoGe::Builder::SNP::Platypus qw(build);
@@ -67,7 +68,6 @@ sub build {
     # Build analytical tasks based on file type
     if ( $file_type eq 'fastq' || $file_type eq 'bam' ) {
         my $bam_file;
-        my $result_count = 0;
          
         # Align fastq file or take existing bam
         if ( $file_type && $file_type eq 'fastq' ) {
@@ -88,7 +88,6 @@ sub build {
             push @tasks, @{$alignment_workflow->{tasks}};
             $bam_file = $alignment_workflow->{bam_file};
             push @done_files, @{$alignment_workflow->{done_files}};
-            $result_count++;
         }
         elsif ( $file_type && $file_type eq 'bam' ) {
             $bam_file = $input_files[0];
@@ -125,7 +124,6 @@ sub build {
             );
             push @tasks, @{$expression_workflow->{tasks}};
             push @done_files, @{$expression_workflow->{done_files}};
-            $result_count++;
         }
         
         # Add SNP workflow (if specified)
@@ -152,7 +150,6 @@ sub build {
             }
             push @tasks, @{$snp_workflow->{tasks}};
             push @done_files, @{$snp_workflow->{done_files}};
-            $result_count++;
         }
     }
     # Else, all other file types
@@ -160,7 +157,7 @@ sub build {
         # Add diversity analysis if specified
         if ( $file_type eq 'vcf' && $self->params->{diversity_params} ) {
             my $vcf_file = $input_files[0];
-            my $diversity_workflow = CoGe::Builder::PopGen::Diversity::build(
+            my $diversity_workflow = CoGe::Builder::PopGen::SummaryStats::build(
                 user => $self->user,
                 wid => $self->workflow->id,
                 genome => $genome,
@@ -170,7 +167,6 @@ sub build {
             );
             push @tasks, @{$diversity_workflow->{tasks}};
             push @done_files, @{$diversity_workflow->{done_files}};
-            $result_count++;
         }
         
         # Generate additional metadata for resulting experiments

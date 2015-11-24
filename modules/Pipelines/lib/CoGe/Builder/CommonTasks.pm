@@ -29,6 +29,7 @@ our @EXPORT = qw(
     create_load_annotation_job create_data_retrieval_workflow
     send_email_job add_items_to_notebook_job create_hisat2_workflow
     export_experiment_job create_bgzip_job create_tabix_index_job
+    create_sumstats_job
 );
 
 our $CONF = CoGe::Accessory::Web::get_defaults();
@@ -374,7 +375,7 @@ sub create_bgzip_job {
     my $cmd = $CONF->{BGZIP} || 'bgzip';
 
     return {
-        cmd => "$cmd -c $input_file > $output_file ;  touch $output_file.bgzipped",
+        cmd => "$cmd -c $input_file > $output_file ;  touch $output_file.done",
         script => undef,
         args => [],
         inputs => [
@@ -382,7 +383,7 @@ sub create_bgzip_job {
         ],
         outputs => [
             $output_file,
-            "$output_file.bgzipped"
+            "$output_file.done"
         ],
         description => "Compressing " . basename($input_file) . " with bgzip..."
     };
@@ -396,7 +397,7 @@ sub create_tabix_index_job {
     my $cmd = $CONF->{TABIX} || 'tabix';
 
     return {
-        cmd => "$cmd -p $index_type $input_file ;  touch $output_file.tabixed",
+        cmd => "$cmd -p $index_type $input_file ;  touch $output_file.done",
         script => undef,
         args => [],
         inputs => [
@@ -404,7 +405,7 @@ sub create_tabix_index_job {
         ],
         outputs => [
             $output_file,
-            "$output_file.tabixed"
+            "$output_file.done"
         ],
         description => "Indexing " . basename($input_file) . "..."
     };
@@ -1386,13 +1387,13 @@ sub create_gsnap_job {
 }
 
 sub create_sumstats_job {
-    my $opts = shift;
+    my %opts = @_;
 
     # Required arguments
-    my $vcf = $opts->{vcf};
-    my $gff = $opts->{gff};
-    my $fasta = $opts->{fasta};
-    my $output_path = $opts->{output_path};
+    my $vcf = $opts{vcf};
+    my $gff = $opts{gff};
+    my $fasta = $opts{fasta};
+    my $output_path = $opts{output_path};
     
     my $cmd = catfile(($CONF->{SCRIPTDIR}, "popgen/sumstats.pl"));
     die "ERROR: SCRIPTDIR not specified in config" unless $cmd;

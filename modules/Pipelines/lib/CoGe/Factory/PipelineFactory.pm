@@ -14,6 +14,7 @@ use CoGe::Builder::Load::Genome;
 use CoGe::Builder::Load::Annotation;
 use CoGe::Builder::SNP::IdentifySNPs;
 use CoGe::Builder::Expression::MeasureExpression;
+use CoGe::Builder::PopGen::MeasureDiversity;
 
 has 'db' => (
     is => 'ro',
@@ -77,7 +78,7 @@ sub get {
         $builder = CoGe::Builder::Expression::MeasureExpression->new($request);
     }
     elsif ($message->{type} eq "analyze_diversity") {
-        $builder = CoGe::Builder::PopGen::SummaryStats->new($request);
+        $builder = CoGe::Builder::PopGen::MeasureDiversity->new($request);
     }
     else {
         print STDERR "PipelineFactory::get unknown type\n";
