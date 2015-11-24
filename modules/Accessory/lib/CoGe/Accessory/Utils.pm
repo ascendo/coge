@@ -43,7 +43,7 @@ BEGIN {
         units commify print_fasta get_unique_id get_link_coords 
         format_time_diff sanitize_name execute directory_size
         trim js_escape html_escape to_filename to_pathname
-        is_fastq_file detect_paired_end
+        is_fastq_file is_gzipped detect_paired_end
     );
 }
 
@@ -197,6 +197,11 @@ sub execute {
 sub is_fastq_file {
     my $filename = shift;
     return ($filename =~ /fastq$/ || $filename =~ /fastq\.gz$/ || $filename =~ /fq$/ || $filename =~ /fq\.gz$/);
+}
+
+sub is_gzipped {
+    my $filename = shift;
+    return ( $filename =~ /\.gz$/ );
 }
 
 # Separate files based on last occurrence of _R1 or _R2 in filename
