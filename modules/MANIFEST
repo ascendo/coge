@@ -159,6 +159,7 @@ Pipelines/lib/CoGe/Builder/SNP/Samtools.pm
 Pipelines/lib/CoGe/Builder/Expression/qTeller.pm
 Pipelines/lib/CoGe/Builder/Expression/MeasureExpression.pm
 Pipelines/lib/CoGe/Builder/PopGen/Diversity.pm
+Pipelines/lib/CoGe/Builder/PopGen/MeasureDiversity.pm
 Pipelines/lib/CoGe/Builder/Tools/SynMap.pm
 Pipelines/lib/CoGe/Request/Request.pm
 Pipelines/lib/CoGe/Request/Genome.pm
@@ -187,5 +188,3 @@ Services/lib/CoGe/Services/JBrowse/Configuration.pm
 Services/lib/CoGe/Services/JBrowse/Experiment.pm
 Services/lib/CoGe/Services/JBrowse/Sequence.pm
 Services/lib/CoGe/Services/JBrowse/Feature.pm
-Thirdparty/Tabix.pm
-Thirdparty/TabixIterator.pm
