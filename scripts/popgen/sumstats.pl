@@ -31,6 +31,7 @@ GetOptions(
 );
 
 my $NUM_INDIVIDUALS = 12 * 2;
+my $IGNORE_CHROMOSOMES = 1;
 
 # Create output path if specified
 if (defined $OUTPUT_PATH) {
@@ -71,6 +72,7 @@ print STDERR "Calculating pi, theta, and Tajima's D\n";
 my %allele_cache;
 foreach my $type (sort keys %$pAnnot) {
     next if (defined $FEAT_TYPE and $type ne $FEAT_TYPE);
+    next if ($IGNORE_CHROMOSOMES and $type eq 'chromosome');
     
     # Print type header line
     print $fh join("\t", "#$type", 'CHROMOSOME', 'GENE NAME', 'START', 'END', 
