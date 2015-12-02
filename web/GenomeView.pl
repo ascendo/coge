@@ -43,7 +43,8 @@ sub gen_html {
             WIKI_URL   => $CONF->{WIKI_URL} || '',
             ADJUST_BOX => 1,
             ADMIN_ONLY => $USER->is_admin,
-            CAS_URL    => $CONF->{CAS_URL} || ''
+            CAS_URL    => $CONF->{CAS_URL} || '',
+            NO_DOCTYPE => 1
         );
         $template->param( LOGON => 1 ) unless ($USER->user_name eq 'public');
     }
