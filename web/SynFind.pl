@@ -66,24 +66,26 @@ mkpath( $BEDDIR, 0, 0777 ) unless -d $BEDDIR;
 
 $MAX_PROC = $config->{MAX_PROC};
 $LASTZ =
-    $config->{PYTHON} . " "
+    'nice '
+  . $config->{PYTHON} . ' '
   . $config->{MULTI_LASTZ}
   . " -A $MAX_PROC --path="
   . $config->{LASTZ};
 $LAST =
-    $config->{PYTHON} . " "
+    'nice '
+  . $config->{PYTHON} . ' '
   . $config->{MULTI_LAST}
   . " -a $MAX_PROC --path="
   . $config->{LAST_PATH};
 
 $SCRIPTDIR        = $config->{SCRIPTDIR} . '/synmap/';
-$GEN_FASTA        = catfile($SCRIPTDIR, 'generate_fasta.pl');
-$CONVERT_BLAST    = $config->{CONVERT_BLAST};
-$BLAST2BED        = catfile($SCRIPTDIR, 'blast2bed.pl');
-$BLAST2RAW        = $config->{BLAST2RAW};
-$SYNTENY_SCORE    = $config->{SYNTENY_SCORE};
+$GEN_FASTA        = 'nice ' . catfile($SCRIPTDIR, 'generate_fasta.pl');
+$CONVERT_BLAST    = 'nice ' . $config->{CONVERT_BLAST};
+$BLAST2BED        = 'nice ' . catfile($SCRIPTDIR, 'blast2bed.pl');
+$BLAST2RAW        = 'nice ' . $config->{BLAST2RAW};
+$SYNTENY_SCORE    = 'nice ' . $config->{SYNTENY_SCORE};
 $PYTHON26         = $config->{PYTHON};
-$DATASETGROUP2BED = $config->{DATASETGROUP2BED};
+$DATASETGROUP2BED = 'nice ' . $config->{DATASETGROUP2BED};
 $COOKIE_NAME      = $config->{COOKIE_NAME};
 
 if ( $FORM->param('get_master') ) {
@@ -1522,6 +1524,7 @@ sub get_results {
     #query is the first item on this list.
     $query_info = shift @target_info;
 
+       
     foreach my $target (@target_info) {
         my ( $org1, $org2 ) = ( $query_info->{org_name}, $target->{org_name} );
         my ( $dsgid1, $dsgid2 ) = ( $query_info->{dsgid}, $target->{dsgid} );
@@ -1726,7 +1729,11 @@ sub get_results {
         $blastfile_link = $item->{filtered_blastfile};
         $blastfile_link =~ s/$config->{COGEDIR}//;
 
-        $html .= qq{<a href="$blastfile_link" class="small" target=_new>Filtered Blast</a><br>};
+        $html .= qq{<a href="$blastfile_link" class="small" target=_new>Filtered Blast, </a>};
+	my $db = $item->{synteny_score_db};
+        $db =~ s/$config->{COGEDIR}//;
+	$html .= qq{<a href="$db" class="small" target=_new> Synteny_Score SQLite Database</a><br>};
+	
     }
 
     return encode_json({
@@ -2367,7 +2374,7 @@ sub get_master_syn_sets {
                                   || $a->name cmp $b->name
                               } $coge->resultset('FeatureName')
                               ->search( { feature_id => $fid } );
-                            $name .= $name_hash->name . ",";
+                            $name .=  $name_hash?$name_hash->name . ",":$fid.",";
                             $link .= ";fid$count=$fid";
                         }
                         else {

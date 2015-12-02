@@ -7,7 +7,7 @@ use Data::Dumper qw(Dumper);
 use File::Spec::Functions qw(catdir catfile);
 use CoGe::Core::Storage qw(get_genome_file get_experiment_files get_popgen_result_path);
 use CoGe::Builder::CommonTasks;
-use CoGe::Accessory::Utils qw(is_gzipped to_filename);
+use CoGe::Accessory::Utils qw(to_filename);
 
 sub get_name {
     #my $self = shift;
