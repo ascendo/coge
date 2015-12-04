@@ -77,7 +77,7 @@ foreach my $type (sort keys %$pAnnot) {
     # Print type header line
     print $fh join("\t", "#$type", 'CHROMOSOME', 'GENE NAME', 'START', 'END', 
         'TOTAL SITES', 'TOTAL SEG. SITES', 'TOTAL PI', 'TOTAL THETA', "TOTAL TAJIMA'S D");
-    print $fh join("\t", 
+    print $fh "\t", join("\t", 
         '0-FOLD SITES', '0-FOLD SEG. SITES', '0-FOLD PI', '0-FOLD THETA', "0-FOLD TAJIMA'S D", 
         '4-FOLD SITES', '4-FOLD SEG. SITES', '4-FOLD PI', '4-FOLD THETA', "4-FOLD TAJIMA'S D")
         if ($type eq 'cds');
@@ -187,14 +187,14 @@ foreach my $type (sort keys %$pAnnot) {
             }
             
             # Print result row
-            print $fh join("\t", $chr, $id, $featStart, $featEnd), "\t";
+            print $fh join("\t", $chr, $id, $featStart, $featEnd);
             my @output = ( $type eq 'cds' ? ('total', 0, 4) : ('total') );
             foreach my $d (@output) {
-                print $fh join("\t", ( $stats{$d}{sites}   // 0,
+                print $fh "\t", join("\t", ( $stats{$d}{sites}   // 0,
                                    $stats{$d}{segregating} // 0,
                                    $stats{$d}{pi}    ? sprintf("%.4f", $stats{$d}{pi})    : 0, 
                                    $stats{$d}{theta} ? sprintf("%.4f", $stats{$d}{theta}) : 0, 
-                                   $stats{$d}{tajD}  ? sprintf("%.4f", $stats{$d}{tajD})  : 'NaN' ) ), "\t";
+                                   $stats{$d}{tajD}  ? sprintf("%.4f", $stats{$d}{tajD})  : 'NaN' ) );
             }
             print $fh "\n";
         }
