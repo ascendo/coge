@@ -922,6 +922,7 @@ function JobGrid(params) {
 	this.schedule_update = params.schedule_update;
 	this.cancel_update = params.cancel_update;
 	this.timers = new Array();
+	this.cancelled_jobs = new Array();
 	this.updating = true;
 	this.flag = false;
 	this.data;
@@ -1006,7 +1007,7 @@ $.extend(JobGrid.prototype, {
 			    },
 			    complete: function(data) {
 			    	self.flag = false;
-
+			    	
 			    	$('#' + self.elementId + '_table tbody').off( 'click' );
 					$('#' + self.elementId + '_table tbody').on( 'click', 'tr', function () {
 				        if ( $(this).hasClass('selected') ) {
@@ -1016,8 +1017,44 @@ $.extend(JobGrid.prototype, {
 				            self.table.$('tr.selected').removeClass('selected');
 				            $(this).addClass('selected');
 				        }
-				    } );
-			    	
+				    });
+					
+					//Change color of cancelled rows
+					var indexes;
+					/*var cancel_string = ""
+					for(i in self.cancelled_jobs) {
+						indexes = self.table.rows().eq( 0 ).filter( function (rowIdx) {
+							if((self.table.cell( rowIdx, 0 ).data() === self.cancelled_jobs[i]) && !(self.table.cell( rowIdx, 7 ).data() === 'Cancelled')) {
+								cancel_string += " " + self.cancelled_jobs[i];
+								return self.table.cell( rowIdx, 0 ).data() === self.cancelled_jobs[i] ? true : false;
+							} else {
+								self.cancelled_jobs.splice(i, 1);
+								return false;
+							}
+						});
+					}
+					self.table.rows( indexes )
+						.nodes()
+						.to$()
+						.addClass("cancelled");
+					$('#' + self.elementId + '_table tbody tr.cancelled').css("background-color", "pink");*/
+					
+					indexes = self.table.rows().eq( 0 ).filter( function (rowIdx) {
+					    return self.table.cell( rowIdx, 7 ).data() === 'Cancelled' ? true : false;
+					});
+					self.table.rows( indexes )
+						.nodes()
+						.to$()
+						.addClass("cancelled");
+					$('#' + self.elementId + '_table tbody tr.cancelled').css("background-color", "pink");
+					
+					//Update cancel string
+					self.cancelled_jobs = new Array();
+					//if(self.cancelled_jobs.length > 0) {
+					//	$('#' + self.elementId + '_cancel_list').html("Cancelling jobs:" + cancel_string);
+					//} else {
+						$('#' + self.elementId + '_cancel_list').html("");
+					//}
 			    	self.schedule_update(5000);
 			    }
 			});
@@ -1026,7 +1063,7 @@ $.extend(JobGrid.prototype, {
 	update: function(delay) {
 		var self = this;
 		if (self.updating) {
-			console.log("Updating jobs");
+			//console.log("Updating jobs");
 			self.cancel_update();
 			self.timers['update'] = window.setTimeout(
 				function() { self.get_data.call(self); },
@@ -1053,13 +1090,25 @@ $.extend(JobGrid.prototype, {
 	cancel_job: function() {
 		var self = this;
 		var parent_id = self.table.row('.selected').data()[0];
-	    self.submit_task("cancel_job", parent_id);
+		$('#' + self.elementId + '_table tbody tr.selected').css("background-color", "pink");
+
+		//Update cancel string
+		self.cancelled_jobs.push(parent_id);
+		var cancel_string = "";
+		for(var i in self.cancelled_jobs) {
+			cancel_string += " " + self.cancelled_jobs[i];
+		}
+		$('#' + self.elementId + '_cancel_list').html("Cancelling jobs:" + cancel_string);
+
+		//Actually send the cancel request
+		self.submit_task("cancel_job", parent_id);
 		
 		self.get_data.call(self);
 	},
 	restart_job: function() {
 		var self = this;
 		var parent_id = self.table.row('.selected').data()[0];
+		$('#' + self.elementId + '_table tbody tr.selected').css("background-color", "white");
 	    self.submit_task("restart_job", parent_id);
 
 	    self.get_data.call(self);
