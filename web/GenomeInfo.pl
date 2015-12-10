@@ -87,7 +87,7 @@ my %ajax = CoGe::Accessory::Web::ajax_func();
     export_tbl                 => \&export_tbl,
     export_features            => \&export_features,
     get_genome_info_details    => \&get_genome_info_details,
-    get_features               => \&get_feature_counts,
+    get_feature_counts         => \&get_feature_counts,
     gen_data                   => \&gen_data,
     get_gc_for_genome          => \&get_gc_for_genome,
     get_gc_for_noncoding       => \&get_gc_for_noncoding,
@@ -190,7 +190,7 @@ sub get_genome_info_details {
     $html .= "</table>";
 
     $html .= qq{<div class="left coge-table-header">Features</div>}
-          .  qq{<div id="genome_features" style="margin-bottom: 5px;" class="small padded link border-top" onclick="get_features('#genome_features');" >Click for Features</div>};
+          .  qq{<div id="genome_features" style="margin-bottom: 5px;" class="small padded link border-top" onclick="get_feature_counts('#genome_features');" >Click for Features</div>};
 
     return $html;
 }
@@ -2091,7 +2091,7 @@ sub generate_body {
     my $user_can_edit = $USER->is_admin || $USER->is_owner_editor( dsg => $gid );
     my $user_can_delete = $USER->is_admin || $USER->is_owner( dsg => $gid );
 
-    my $exp_count = $genome->experiments->count( { deleted => 0 } );
+    my $exp_count = 0;#$genome->experiments->count( { deleted => 0 } );
     my $experiments;
 
     if ($exp_count < 20) {

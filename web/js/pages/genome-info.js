@@ -223,7 +223,7 @@ function search_organisms (search_term) {
     }
 }
 
-function get_features(selector) {
+function get_feature_counts(selector) {
     var elem = $(selector);
     elem.html(spinner.clone())
         .attr("onclick", "")
@@ -232,7 +232,7 @@ function get_features(selector) {
 
     $.ajax({
         data: {
-            fname: "get_features",
+            fname: "get_feature_counts",
             dsgid: coge.GenomeInfo.pageObj.genome_id,
             gstid: $("#gstid").val()
         },
