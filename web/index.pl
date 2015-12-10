@@ -85,16 +85,29 @@ sub generate_body {
     );
     $tmpl->param(
         'INTRO'   => 1,
-        ORG_COUNT => 0,#commify( $coge->resultset('Organism')->count() ),
-        GEN_COUNT => 0,#commify( $coge->resultset('Genome')->search( { deleted => 0 } )->count() ),
-        FEAT_COUNT => 0,#commify( $coge->resultset('Feature')->count() ),
-        ANNOT_COUNT => 0,#commify( $coge->resultset('FeatureAnnotation')->count() ),
-        EXP_COUNT => 0,#commify( $coge->resultset('Experiment')->search( { deleted => 0 } )->count() ),
-        QUANT_COUNT => 0,#commify(
-        #    units(
-        #        $coge->resultset('Experiment')->search( { deleted => 0 } )->get_column('row_count')->sum
-        #    )
-        #)
+        ORG_COUNT => commify( $coge->resultset('Organism')->count() ),
+        GEN_COUNT => commify(
+            $coge->resultset('Genome')->search( { deleted => 0 } )->count()
+        ),
+#        NUCL_COUNT => .'('.commify(
+#            units(
+#                $coge->resultset('GenomicSequence')
+#                  ->get_column('sequence_length')->sum
+#              )
+#              . 'bp)'
+#        ),
+        FEAT_COUNT => commify( $coge->resultset('Feature')->count() ),
+        ANNOT_COUNT =>
+          commify( $coge->resultset('FeatureAnnotation')->count() ),
+        EXP_COUNT => commify(
+            $coge->resultset('Experiment')->search( { deleted => 0 } )->count()
+        ),
+        QUANT_COUNT => commify(
+            units(
+                $coge->resultset('Experiment')->search( { deleted => 0 } )
+                  ->get_column('row_count')->sum
+            )
+        )
     );
 
     $tmpl->param( wikifeed => $P->{WIKI_URL}."/CoGepedia:Current_events" ) if $P->{WIKI_URL};
