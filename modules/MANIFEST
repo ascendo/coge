@@ -42,6 +42,7 @@ Algos/PopGen/lib/CoGe/Algos/PopGen/Results.pm
 Algos/PopGen/lib/CoGe/Algos/PopGen/Stats.pm
 Core/lib/CoGe/Core/Experiment.pm
 Core/lib/CoGe/Core/Genome.pm
+Core/lib/CoGe/Core/Feature.pm
 Core/lib/CoGe/Core/Metadata.pm
 Core/lib/CoGe/Core/Notebook.pm
 Core/lib/CoGe/Core/Storage.pm
@@ -173,6 +174,7 @@ Services/lib/CoGe/Services/Routes.pm
 Services/lib/CoGe/Services/Data/Experiment.pm
 Services/lib/CoGe/Services/Data/Genome.pm
 Services/lib/CoGe/Services/Data/Genome2.pm
+Services/lib/CoGe/Services/Data/Feature2.pm
 Services/lib/CoGe/Services/Data/Group.pm
 Services/lib/CoGe/Services/Data/Notebook.pm
 Services/lib/CoGe/Services/Data/Organism.pm
