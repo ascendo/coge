@@ -87,7 +87,7 @@ foreach my $type (sort keys %$pAnnot) {
         next if (defined $CHR and $chr ne $CHR);
     
         # Print chromosome header line
-        print $fh "#$chr\n";
+        print $fh "#$chr\t", length($pSeq->{$chr}), "\n";
             
         foreach my $id (sort keys %{$pAnnot->{$type}{$chr}}) {
             next if (defined $GENE_NAME and $id ne $GENE_NAME);
