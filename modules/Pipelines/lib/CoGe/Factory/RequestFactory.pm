@@ -52,6 +52,7 @@ sub get {
     elsif ($type eq "analyze_snps" ||
            $type eq "analyze_expression" ||
            $type eq "analyze_diversity") 
+           $type eq "analyze_methylation") 
     {
         return CoGe::Request::ExperimentAnalysis->new($options);
     }
